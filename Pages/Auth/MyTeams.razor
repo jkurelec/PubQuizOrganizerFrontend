@@ -1,0 +1,391 @@
+﻿@page "/my-teams"
+
+@inject UserInfoService UserInfoService
+@inject IDialogService DialogService
+@inject ITeamService TeamService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudGrid Class="my-4" GutterSize="24px">
+    <MudItem xs="12" md="8">
+        <MudContainer MaxWidth="MaxWidth.Medium" Class="my-4">
+            @if (teams == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (!teams.Any())
+            {
+                <MudText>No teams found.</MudText>
+            }
+            else
+            {
+                @foreach (var team in teams)
+                {
+                    var currentUserMember = team.TeamMembers.FirstOrDefault(m => m.Id == userInfo?.Id);
+
+                    <MudCard Class="mb-3" Elevation="3">
+                        <MudCardContent Class="position-relative">
+                            <MudText Typo="Typo.h6" Class="cursor-pointer mb-1" onclick="@(() => NavigateToTeamProfile(team.Id))">
+                                @team.Name
+                                @if (userInfo?.Id == team.OwnerId)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" Class="ml-1" />
+                                }
+                                @if (currentUserMember?.RegisterTeam == true)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="ml-1" />
+                                }
+                            </MudText>
+
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Quiz: @team.Quiz.Name (Rating: @team.Quiz.Rating)
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Category: @team.Category.Name
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-1">
+                                Members: @team.TeamMembers.Count()
+                            </MudText>
+
+                            <MudIconButton Icon="@Icons.Material.Filled.ExpandMore"
+                            Color="Color.Default"
+                            OnClick="() => ToggleExpand(team.Id)"
+                            Class="@GetExpandIconClass(team.Id)"
+                            Style="position: absolute; top: 8px; right: 8px;" />
+                        </MudCardContent>
+
+                        @if (expandedTeamIds.Contains(team.Id))
+                        {
+                            <MudCardContent>
+                                <MudList T="UserTeamDto" Dense="true">
+                                    @foreach (var member in team.TeamMembers.Where(m => m.Id != userInfo?.Id))
+                                    {
+                                        <MudListItem>
+                                            <div class="d-flex justify-content-between align-items-center w-100">
+                                                <div>
+                                                    <MudText Class="cursor-pointer d-inline" Color="Color.Primary" Style="text-decoration: underline;"
+                                                             onclick="@(() => NavigateToUserProfile(member.Id))">
+                                                        @member.Username
+                                                    </MudText>
+                                                    @if (member.Id == team.OwnerId)
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" Class="ml-1" />
+                                                    }
+                                                    @if (member.RegisterTeam)
+                                                    {
+                                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" Class="ml-1" />
+                                                    }
+                                                </div>
+
+                                                @if (userInfo?.Id == team.OwnerId && member.Id != team.OwnerId)
+                                                {
+                                                    <div class="d-flex align-items-center">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Star"
+                                                        Color="Color.Info"
+                                                        Size="Size.Small"
+                                                        Class="me-2"
+                                                        OnClick="() => ConfirmTransferOwnership(team, member)" />
+
+                                                        <MudIconButton Icon="@Icons.Material.Filled.CheckCircle"
+                                                        Color="@(member.RegisterTeam ? Color.Default : Color.Success)"
+                                                        Size="Size.Small"
+                                                        OnClick="() => ConfirmChangeRegisterTeamPrivilage(team, member)"
+                                                        Class="me-2" />
+
+                                                        <MudIconButton Icon="@Icons.Material.Filled.PersonRemove"
+                                                        Color="Color.Error"
+                                                        Size="Size.Small"
+                                                        OnClick="() => ConfirmRemovePlayer(team, member)" />
+                                                    </div>
+                                                }
+                                            </div>
+                                        </MudListItem>
+                                    }
+
+                                    <MudDivider Class="my-2" />
+
+                                    <MudListItem>
+                                        <MudButton Variant="Variant.Filled"
+                                            Color="@(userInfo?.Id == team.OwnerId ? Color.Warning : Color.Error)"
+                                            FullWidth="true"
+                                            OnClick="() => LeaveTeamClicked(team)">
+                                            Leave Team
+                                        </MudButton>
+                                    </MudListItem>
+                                </MudList>
+                            </MudCardContent>
+                        }
+                    </MudCard>
+                }
+            }
+        </MudContainer>
+    </MudItem>
+
+    <MudItem xs="12" md="4">
+        <MudPaper Class="p-4 mb-4">
+            <MudText Typo="Typo.h6">Applications</MudText>
+            @if (applications == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (!applications.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No applications</MudText>
+            }
+            else
+            {
+                @foreach (var app in applications)
+                {
+                    <MudPaper Class="p-2 mb-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2">@app.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@app.CreatedAt.ToString("g")</MudText>
+                        </div>
+                        <div>
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" OnClick="() => RespondToApplication(app.Id, true)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" OnClick="() => RespondToApplication(app.Id, false)" />
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudPaper>
+
+        <MudPaper Class="p-4">
+            <MudText Typo="Typo.h6">Invitations</MudText>
+            @if (invitations == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (!invitations.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No invitations</MudText>
+            }
+            else
+            {
+                @foreach (var invite in invitations)
+                {
+                    <MudPaper Class="p-2 mb-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2">@invite.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@invite.CreatedAt.ToString("g")</MudText>
+                        </div>
+                        <div>
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" OnClick="() => RespondToInvitation(invite.Id, true)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" OnClick="() => RespondToInvitation(invite.Id, false)" />
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="12">
+            @if (userInfo?.TeamId == null)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                           Class="mb-2" OnClick="() => showCreateTeam = !showCreateTeam">
+                    Create a Team
+                </MudButton>
+
+                @if (showCreateTeam)
+                {
+                    <MudPaper Class="p-3 mb-4">
+                        <MudTextField @bind-Value="newTeamName" Label="Team Name" FullWidth="true" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="CreateTeamAsync" Class="mt-2">
+                            Submit
+                        </MudButton>
+                    </MudPaper>
+                }
+            }
+    </MudItem>
+</MudGrid>
+
+<MudPaper Style="position: fixed; bottom: 1rem; right: 1rem; padding: 0.5rem 1rem; background: white; border-radius: 4px; box-shadow: 0 0 10px rgba(0,0,0,0.1); z-index: 999;">
+    <MudStack Direction="Row" AlignItems="AlignItems.Center" Spacing="1">
+        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" />
+        <MudText Typo="Typo.caption">Owner/Admin</MudText>
+    </MudStack>
+    <MudStack Direction="Row" AlignItems="AlignItems.Center" Spacing="1" Class="mt-1">
+        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+        <MudText Typo="Typo.caption">Registered Team</MudText>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private UserInfo? userInfo;
+    private List<TeamDetailedDto>? teams;
+    private IEnumerable<TeamApplicationInvitationDto>? applications;
+    private IEnumerable<TeamApplicationInvitationDto>? invitations;
+    private HashSet<int> expandedTeamIds = new();
+    private bool showCreateTeam = false;
+    private string newTeamName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userInfo = await UserInfoService.GetUserInfoAsync();
+        teams = await LoadUserTeamsAsync();
+        applications = await TeamService.GetApplications();
+        invitations = await TeamService.GetInvitations();
+
+        var ownedTeam = teams.FirstOrDefault(t => t.OwnerId == userInfo?.Id);
+
+        if (ownedTeam != null)
+        {
+            teams.Remove(ownedTeam);
+            teams.Insert(0, ownedTeam);
+        }
+    }
+
+    private async Task RespondToApplication(int id, bool accepted)
+    {
+        await TeamService.AnswerApplication(new(id, accepted));
+        applications = await TeamService.GetApplications();
+        await RefreshTeams();
+        StateHasChanged();
+    }
+
+    private async Task RespondToInvitation(int id, bool accepted)
+    {
+        await TeamService.AnswerInvitation(new (id, accepted));
+        invitations = await TeamService.GetInvitations();
+        await RefreshTeams();
+        StateHasChanged();
+    }
+
+    private void ToggleExpand(int teamId)
+    {
+        if (!expandedTeamIds.Add(teamId))
+            expandedTeamIds.Remove(teamId);
+    }
+
+    private string GetExpandIconClass(int teamId)
+    {
+        return expandedTeamIds.Contains(teamId) ? "expand-icon rotate-180" : "expand-icon";
+    }
+
+    private async Task LeaveTeamClicked(TeamDetailedDto team)
+    {
+        if (userInfo?.Id == team.OwnerId)
+        {
+            Snackbar.Add("Transfer ownership before leaving the club!", Severity.Error);
+            return;
+        }
+
+        bool? result = await DialogService.ShowMessageBox(
+            "Confirm Leave",
+            $"Are you sure you want to leave team '{team.Name}'?",
+            yesText: "Leave",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await LeaveTeam(team.Id);
+            await RefreshTeams();
+        }
+    }
+
+    private async Task LeaveTeam(int teamId)
+    {
+        await TeamService.LeaveTeam(teamId);
+    }
+
+    private async Task ConfirmRemovePlayer(TeamDetailedDto team, UserTeamDto player)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Confirm Remove",
+            $"Remove {player.Username} from team '{team.Name}'?",
+            yesText: "Remove",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await RemovePlayer(player.Id);
+            await RefreshTeams();
+        }
+    }
+
+    private async Task RemovePlayer(int userId)
+    {
+        await TeamService.RemoveMember(userId);
+    }
+
+    private async Task ConfirmTransferOwnership(TeamDetailedDto team, UserTeamDto newOwner)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Confirm Transfer",
+            $"Transfer ownership of team '{team.Name}' to {newOwner.Username}?",
+            yesText: "Transfer",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await TransferOwnership(newOwner.Id);
+            await RefreshTeams();
+        }
+    }
+
+    private async Task TransferOwnership(int newOwnerId)
+    {
+        await TeamService.ChangeOwner(newOwnerId);
+    }
+
+    private async Task ConfirmChangeRegisterTeamPrivilage(TeamDetailedDto team, UserTeamDto user)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Confirm Register Team",
+            $"Give / Revoke the right to register team to {user.Username}?",
+            yesText: "Confirm",
+            cancelText: "Cancel");
+
+        if (result == true)
+        {
+            await ChangeRegisterTeamPrivilage(team.Id, user.Id, user.RegisterTeam);
+            await RefreshTeams();
+        }
+    }
+
+    private async Task ChangeRegisterTeamPrivilage(int teamId, int userId, bool registerTeam)
+    {
+        await TeamService.EditMember(
+            new TeamMemberDto
+            {
+                TeamId = teamId,
+                UserId = userId,
+                RegisterTeam = !registerTeam
+            }
+        );
+    }
+
+    private async Task CreateTeamAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newTeamName))
+            return;
+
+        await TeamService.CreateTeam(newTeamName);
+        showCreateTeam = false;
+        newTeamName = string.Empty;
+
+        await RefreshTeams();
+    }
+
+    private async Task RefreshTeams()
+    {
+        teams = await LoadUserTeamsAsync();
+        StateHasChanged();
+    }
+
+    private async Task<List<TeamDetailedDto>> LoadUserTeamsAsync()
+    {
+        var loaded = await TeamService.GetUserTeams();
+        return loaded.ToList();
+    }
+
+    private void NavigateToUserProfile(int userId)
+    {
+        Navigation.NavigateTo($"/player/{userId}");
+    }
+
+    private void NavigateToTeamProfile(int teamId)
+    {
+        Navigation.NavigateTo($"/team/{teamId}");
+    }
+}

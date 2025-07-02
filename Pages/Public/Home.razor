@@ -1,0 +1,114 @@
+﻿@page "/"
+
+@inject UserInfoService UserInfoService
+@inject NavigationManager Navigation
+@inject IQuizEditionService QuizEditionService
+
+<MudPaper Class="pa-6 mx-auto" MaxWidth="600px" Elevation="4">
+    <MudText Typo="Typo.h4" GutterBottom="true">Welcome to PubQuiz</MudText>
+    @if (Name != null)
+    {
+        <MudText>Hello @Name</MudText>
+    }
+    <MudText>This is a shared page for all users.</MudText>
+
+    <MudTabs @bind-ActivePanelIndex="_activeTabIndex" Rounded="true">
+        <MudTabPanel Text="All">
+            <div style="height:600px; overflow-y: auto;" tabindex="0">
+                <Virtualize Context="edition" ItemsProvider="LoadAll" ItemSize="92" OverscanCount="5">
+                    <ItemContent>
+                        <MudCard Class="my-2 pa-3" Style="min-height: 80px; cursor: pointer;"
+                                 @onclick="@(() => NavigateToEdition(edition.Id))">
+                            <MudText Typo="Typo.subtitle1">@edition.Name</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Category: @edition.Category.Name</MudText>
+                            <MudText Typo="Typo.caption">Date: @edition.Time.ToString("f")</MudText>
+                            <MudText Typo="Typo.caption">Rating: @edition.Rating</MudText>
+                            <MudText Typo="Typo.caption">Teams: @edition.AcceptedTeams / @edition.MaxTeams</MudText>
+                        </MudCard>
+                    </ItemContent>
+                </Virtualize>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Upcoming">
+            <div style="height:600px; overflow-y: auto;" tabindex="0">
+                <Virtualize Context="edition" ItemsProvider="LoadUpcoming" ItemSize="92" OverscanCount="3">
+                    <ItemContent>
+                        <MudCard Class="my-2 pa-3" Style="min-height: 80px; cursor: pointer;"
+                                 @onclick="@(() => NavigateToEdition(edition.Id))">
+                            <MudText Typo="Typo.subtitle1">@edition.Name</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Category: @edition.Category.Name</MudText>
+                            <MudText Typo="Typo.caption">Date: @edition.Time.ToString("f")</MudText>
+                            <MudText Typo="Typo.caption">Rating: @edition.Rating</MudText>
+                            <MudText Typo="Typo.caption">Teams: @edition.AcceptedTeams / @edition.MaxTeams</MudText>
+                        </MudCard>
+                    </ItemContent>
+                </Virtualize>
+            </div>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Past">
+            <div style="height:600px; overflow-y: auto;" tabindex="0">
+                <Virtualize Context="edition" ItemsProvider="LoadCompleted" ItemSize="92" OverscanCount="3">
+                    <ItemContent>
+                        <MudCard Class="my-2 pa-3" Style="min-height: 80px; cursor: pointer;"
+                                 @onclick="@(() => NavigateToEdition(edition.Id))">
+                            <MudText Typo="Typo.subtitle1">@edition.Name</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Category: @edition.Category.Name</MudText>
+                            <MudText Typo="Typo.caption">Date: @edition.Time.ToString("f")</MudText>
+                            <MudText Typo="Typo.caption">Rating: @edition.Rating</MudText>
+                            <MudText Typo="Typo.caption">Teams: @edition.AcceptedTeams / @edition.MaxTeams</MudText>
+                        </MudCard>
+                    </ItemContent>
+                </Virtualize>
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+</MudPaper>
+
+@code {
+    private int _activeTabIndex = 0;
+    private string? Name;
+    private const int PageSize = 5;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userInfo = await UserInfoService.GetUserInfoAsync();
+        Name = userInfo?.Username;
+    }
+
+    private async ValueTask<ItemsProviderResult<QuizEditionMinimalDto>> LoadAll(ItemsProviderRequest request)
+    {
+        var (items, totalCount) = await QuizEditionService.GetAllPage(
+            page: (request.StartIndex / PageSize) + 1,
+            pageSize: request.Count,
+            filter: EditionFilter.NEWEST);
+
+        return new ItemsProviderResult<QuizEditionMinimalDto>(items, totalCount);
+    }
+
+    private async ValueTask<ItemsProviderResult<QuizEditionMinimalDto>> LoadUpcoming(ItemsProviderRequest request)
+    {
+        var (items, totalCount) = await QuizEditionService.GetUpcomingPage(
+            page: (request.StartIndex / PageSize) + 1,
+            pageSize: request.Count,
+            filter: EditionFilter.NEWEST);
+
+        return new ItemsProviderResult<QuizEditionMinimalDto>(items, totalCount);
+    }
+
+    private async ValueTask<ItemsProviderResult<QuizEditionMinimalDto>> LoadCompleted(ItemsProviderRequest request)
+    {
+        var (items, totalCount) = await QuizEditionService.GetCompletedPage(
+            page: (request.StartIndex / PageSize) + 1,
+            pageSize: request.Count,
+            filter: EditionFilter.NEWEST);
+
+        return new ItemsProviderResult<QuizEditionMinimalDto>(items, totalCount);
+    }
+
+    private void NavigateToEdition(int editionId)
+    {
+        Navigation.NavigateTo($"/edition/{editionId}");
+    }
+}

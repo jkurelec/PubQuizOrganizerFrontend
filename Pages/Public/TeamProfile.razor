@@ -1,0 +1,32 @@
+﻿@page "/team/{Id:int}"
+
+@inject UserInfoService UserInfoService
+@inject ITeamService TeamService
+
+<h3>PlayerProfile</h3>
+<MudButton OnClick="ApplyToTeam">Apply</MudButton>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    public UserInfo? UserInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserInfo = await UserInfoService.GetUserInfoAsync();
+    }
+
+    private async Task ApplyToTeam()
+    {
+        if (UserInfo?.Id != null)
+            await TeamService.ApplyToTeam(
+                new()
+                    {
+                        UserId = (int)UserInfo!.Id!,
+                        TeamId = Id,
+                        RegisterTeam = false
+                    }
+            );
+    }
+}

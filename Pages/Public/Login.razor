@@ -1,0 +1,42 @@
+﻿@page "/login"
+
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+
+<MudPaper Class="pa-6 mx-auto mt-12" Style="max-width:400px">
+    <MudText Typo="Typo.h5" Class="mb-4">Login</MudText>
+
+    <EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <MudTextField @bind-Value="loginModel.Identifier" Label="Username or Email" Required="true" For="@(() => loginModel.Identifier)" />
+        <MudTextField @bind-Value="loginModel.Password" Label="Password" Required="true" InputType="InputType.Password" For="@(() => loginModel.Password)" />
+
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <MudText Color="Color.Error">@error</MudText>
+        }
+
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" FullWidth="true">Log In</MudButton>
+    </EditForm>
+</MudPaper>
+
+@code {
+    private LoginUserDto loginModel = new();
+    private string? error;
+
+    private async Task HandleLogin()
+    {
+        error = null;
+        bool success = await AuthService.LoginAsync(loginModel);
+        if (success)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            error = "Invalid username/email or password.";
+        }
+    }
+}

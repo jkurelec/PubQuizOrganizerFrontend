@@ -1,0 +1,32 @@
+﻿@page "/player/{Id:int}"
+
+@inject UserInfoService UserInfoService
+@inject ITeamService TeamService
+
+<h3>PlayerProfile</h3>
+<MudButton OnClick="InvitePlayer">Invite</MudButton>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    public UserInfo? UserInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserInfo = await UserInfoService.GetUserInfoAsync();
+    }
+
+    private async Task InvitePlayer()
+    {
+        if (UserInfo?.TeamId != null)
+            await TeamService.InviteUser(
+                new()
+                {
+                    UserId = Id,
+                    TeamId = (int)UserInfo!.TeamId!,
+                    RegisterTeam = false
+                }
+            );
+    }
+}

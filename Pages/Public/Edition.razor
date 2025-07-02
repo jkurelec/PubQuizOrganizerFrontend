@@ -1,0 +1,253 @@
+﻿@page "/edition/{Id:int}"
+
+@inject UserInfoService UserInfoService
+@inject IQuizEditionService QuizEditionService
+@inject IQuizEditionApplicationService QuizEditionApplicationService
+@inject NavigationManager Navigation
+@inject ITeamService TeamService
+@inject IDialogService DialogService
+
+<PageTitle>@editionDto?.Name</PageTitle>
+
+@if (editionDto == null)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Class="pa-6 mx-auto" MaxWidth="1000px" Gutter="Size.Small">
+        <MudItem xs="12" md="8">
+            <MudPaper Class="pa-6 mx-auto" MaxWidth="700px" Elevation="4">
+                <MudText Typo="Typo.h4" GutterBottom="true">@editionDto.Name</MudText>
+                <MudText Typo="Typo.body1">@editionDto.Category?.Name</MudText>
+                <MudText Typo="Typo.body1">Rating: @editionDto.Rating</MudText>
+                <MudText Typo="Typo.body1">@editionDto.Time.ToString("f", CultureInfo.GetCultureInfo("hr-HR"))</MudText>
+                <MudText Typo="Typo.body2"
+                Style="cursor: pointer; text-decoration: underline;"
+                @onclick="@(() => Navigation.NavigateTo($"/edition/{Id}#map-section", forceLoad: true))">
+                    @editionDto.Location?.Name, @editionDto.Location?.Address,
+                    @editionDto.Location?.City, @editionDto.Location?.Country
+                </MudText>
+                @if (editionDto.League?.Name != null)
+                {
+                    <MudText Typo="Typo.h6">League: @editionDto.League.Name</MudText>
+                }
+
+                <MudText Typo="Typo.body2">By: @editionDto.Quiz?.Name (@editionDto.Host?.Username)</MudText>
+
+                <MudDivider Class="my-2" />
+
+                <MudText Typo="Typo.subtitle1">Registration</MudText>
+                <MudText Typo="Typo.body2">Start: @editionDto.RegistrationStart.ToString("f", CultureInfo.GetCultureInfo("hr-HR"))</MudText>
+                <MudText Typo="Typo.body2">End: @editionDto.RegistrationEnd.ToString("f", CultureInfo.GetCultureInfo("hr-HR"))</MudText>
+                <MudText Typo="Typo.body2">Fee Type: @editionDto.FeeType</MudText>
+                <MudText Typo="Typo.body2">Fee: @editionDto.Fee €</MudText>
+                <MudText Typo="Typo.body2">Duration: @editionDto.Duration min</MudText>
+                <MudText Typo="Typo.body2">Max Team Size: @editionDto.MaxTeamSize</MudText>
+
+                @if (editionDto.Prizes != null && editionDto.Prizes.Any())
+                {
+                    <MudText Typo="Typo.subtitle2" Class="mt-2">Prizes</MudText>
+
+                    var orderedPrizes = editionDto.Prizes
+                    .Where(p => p.Position.HasValue)
+                    .OrderBy(p => p.Position!.Value)
+                    .Select(p => $"{p.Position}. {p.Name}")
+                    .ToList();
+
+                    if (orderedPrizes.Any())
+                    {
+                        <MudList T="string" Dense="true">
+                            @foreach (var prize in orderedPrizes)
+                            {
+                                <MudText Typo="Typo.body2">@prize</MudText>
+                            }
+                        </MudList>
+                    }
+
+                    var randomPrizes = editionDto.Prizes
+                    .Where(p => !p.Position.HasValue)
+                    .Select(p => p.Name)
+                    .ToList();
+
+                    if (randomPrizes.Any())
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-3">Randomly Decided</MudText>
+                        <MudList T="string" Dense="true">
+                            @foreach (var prize in randomPrizes)
+                            {
+                                <MudText Typo="Typo.body2">@prize</MudText>
+                            }
+                        </MudList>
+                    }
+                }
+
+                <MudDivider Class="my-4" />
+
+                <MudCard Class="pa-4" Elevation="2">
+                    <MudText Typo="Typo.subtitle1">Description</MudText>
+                    <MudText Typo="Typo.body2">@editionDto.Description</MudText>
+                </MudCard>
+            </MudPaper>
+
+            <MudPaper id="map-section" Class="pa-6 mt-6 mx-auto" MaxWidth="700px" Elevation="4">
+                @if (editionDto.Location != null)
+                {
+                    var fullAddress = $"{editionDto.Location.Address}, {editionDto.Location.City}, {editionDto.Location.Country}";
+                    var mapUrl = $"https://maps.google.com/maps?q={Uri.EscapeDataString(fullAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed";
+
+                    <MudCard Class="pa-4 mt-6" Style="height: 400px;">
+                        <MudText Typo="Typo.subtitle1" GutterBottom="true">
+                            @editionDto.Location?.Name, @editionDto.Location?.Address,
+                            @editionDto.Location?.City, @editionDto.Location?.Country
+                        </MudText>
+                        <iframe width="@("100%")"
+                        height="350"
+                        style="border:0"
+                        loading="lazy"
+                        allowfullscreen
+                        src="@mapUrl">
+                        </iframe>
+                    </MudCard>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-6" Elevation="4" Style="text-align: center;">
+                <MudText Typo="Typo.h6" Class="mb-2">Accepted Teams</MudText>
+
+                <MudProgressCircular Color="Color.Primary"
+                Size="Size.Large"
+                Value="@GetAcceptedPercentage()"
+                Style="margin-bottom: 1rem;">
+                    <div>@editionDto.AcceptedTeams / @editionDto.MaxTeams</div>
+                </MudProgressCircular>
+
+                <MudList T="AcceptedQuizEditionApplicationDto" Dense="true" Class="mt-2 mb-2" Style="max-height: 300px; overflow-y: auto; text-align: left;">
+                    @if (showTeams && acceptedTeams.Any())
+                    {
+                        @foreach (var team in acceptedTeams.Select((t, i) => (t, i)))
+                        {
+                            <MudListItem T="AcceptedQuizEditionApplicationDto">
+                                <div style="display: flex; justify-content: space-between; width: 100%;">
+                                    <span>@(team.i + 1). @team.t.TeamName</span>
+                                    <span>@team.t.TeamMembers / @editionDto.MaxTeamSize</span>
+                                </div>
+                            </MudListItem>
+                        }
+                    }
+                </MudList>
+
+
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-2"
+                Style="user-select: none;"
+                OnClick="@ToggleShowTeams">
+                    @(showTeams ? "Show Less" : "Show More")
+                </MudButton>
+
+                @if (canApply)
+                {
+                    <MudDivider Class="my-2" />
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ShowRegisterDialog" Class="mt-4" Size="Size.Medium">
+                        Apply
+                    </MudButton>
+                }
+
+                <MudDivider Class="my-2" />
+
+                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Pending Teams</MudText>
+                <MudText Typo="Typo.h6">@editionDto.PendingTeams</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private QuizEditionDetailedDto? editionDto;
+    private bool canApply = false;
+    private bool showTeams = false;
+    private List<AcceptedQuizEditionApplicationDto> acceptedTeams = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        editionDto = await QuizEditionService.GetById(Id);
+
+        await CheckIfUserCanApply(editionDto);
+    }
+
+    private async Task CheckIfUserCanApply(QuizEditionDetailedDto? editionDto)
+    {
+        if (editionDto != null)
+        {
+            var now = DateTime.UtcNow;
+
+            bool inRegistrationPeriod = now >= editionDto.RegistrationStart && now <= editionDto.RegistrationEnd;
+
+            if (inRegistrationPeriod)
+            {
+                var applied = await QuizEditionApplicationService.CheckIfUserApplied(editionDto.Id);
+                canApply = !applied;
+            }
+        }
+    }
+
+    private async Task ToggleShowTeams()
+    {
+        showTeams = !showTeams;
+
+        if (showTeams && (acceptedTeams == null || !acceptedTeams.Any()))
+        {
+            if (editionDto != null)
+            {
+                acceptedTeams = (await QuizEditionApplicationService.GetAcceptedApplicationsByEdition(editionDto.Id)).ToList();
+            }
+        }
+    }
+
+    private double GetAcceptedPercentage()
+    {
+        if (editionDto == null || editionDto.MaxTeams == 0)
+            return 0;
+
+        return ((double)editionDto.AcceptedTeams / editionDto.MaxTeams) * 100;
+    }
+
+    private async Task Apply()
+    {
+        var userInfo = await UserInfoService.GetUserInfoAsync();
+
+        if (userInfo == null)
+            Navigation.NavigateTo("/login");
+
+        canApply = false;
+    }
+
+    private async Task ShowRegisterDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "EditionId", Id },
+            { "MaxTeamSize", editionDto?.MaxTeamSize}
+        };
+
+        var options = new DialogOptions
+            {
+                CloseButton = true,
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true
+            };
+
+        var dialog = await DialogService.ShowAsync<TeamListDialog>("Select a Team to Register", parameters, options);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            await OnInitializedAsync();
+        }
+    }
+}

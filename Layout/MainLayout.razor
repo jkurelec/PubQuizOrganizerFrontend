@@ -1,0 +1,16 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<MudThemeProvider Theme="@CustomThemes.PubQuizTheme" />
+
+<MudLayout>
+    <MudDrawer Open="true" ClipMode="DrawerClipMode.Never" Variant="DrawerVariant.Mini" Elevation="1" Class="mud-width-260">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="px-4 py-3">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

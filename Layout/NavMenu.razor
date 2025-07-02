@@ -1,0 +1,57 @@
+﻿@inject UserInfoService UserInfoService
+@inject NavigationManager Navigation
+@inject IAuthService AuthService
+
+<MudDrawer Open="true" Variant="DrawerVariant.Responsive">
+    <MudNavMenu>
+        <MudText Typo="Typo.h6" Class="pa-4">PubQuiz</MudText>
+
+        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+
+        @if (IsAuthenticated)
+        {
+            <MudNavLink Href="profile" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
+            <MudNavLink Href="my-teams" Icon="@Icons.Material.Filled.People">Teams</MudNavLink>
+            <MudButton StartIcon="@Icons.Material.Filled.Logout"
+                       Color="Color.Inherit"
+                       Variant="Variant.Text"
+                       OnClick="@Logout"
+                       Class="mud-nav-link px-4">
+                Logout
+            </MudButton>
+        }
+        else
+        {
+            <MudNavLink Href="login" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
+        }
+    </MudNavMenu>
+</MudDrawer>
+
+@code {
+    private bool IsAuthenticated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await UserInfoService.GetUserInfoAsync();
+        IsAuthenticated = user != null;
+
+        UserInfoService.UserInfoChanged += OnUserInfoChanged;
+    }
+
+    private void OnUserInfoChanged(UserInfo? userInfo)
+    {
+        IsAuthenticated = userInfo != null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Navigation.NavigateTo("login", true);
+    }
+
+    public void Dispose()
+    {
+        UserInfoService.UserInfoChanged -= OnUserInfoChanged;
+    }
+}
