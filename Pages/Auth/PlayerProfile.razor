@@ -1,0 +1,266 @@
+﻿@page "/player/{Id:int}"
+
+@inject UserInfoService UserInfoService
+@inject IUserService UserService
+@inject IOrganizationService OrganizationService
+@inject IDialogService DialogService
+
+@if (User == null)
+{
+    <MudText>Loading user data...</MudText>
+}
+else
+{
+    <MudPaper Class="pa-6 mx-auto mt-4"  Elevation="4">
+        <MudCard Class="mb-6 pa-4">
+            <MudGrid>
+                <MudItem xs="2">
+                    <MudAvatar Size="Size.Large">
+                        <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{User.ProfileImage}")"
+                                  Alt="@($"Profile image of {User.Username}")"
+                                  Style="width: 100%; height: 100%; object-fit: cover;" />
+                    </MudAvatar>
+                </MudItem>
+
+                <MudItem xs="8" Class="d-flex flex-column justify-center">
+                    <MudText Typo="Typo.h5">@User.Username</MudText>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">
+                        Role: @GetRoleName(User.Role)
+                    </MudText>
+                    <MudText Typo="Typo.body2">Rating: @User.Rating</MudText>
+                </MudItem>
+
+                @if (avaliableQuizzes.Count > 0)
+                {
+                    <MudItem xs="2" Class="d-flex justify-end align-center">
+                        <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
+                                       Color="Color.Primary"
+                                       OnClick="OpenInviteDialog" />
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudCard>
+
+        <MudPaper Class="pa-6 mb-4" Elevation="4">
+            <MudText Typo="Typo.h6">Rating Over Time</MudText>
+
+            <MudSelect @bind-Value="RatingPeriod" Label="Time Period" Class="mb-4" Dense="true" >
+                <MudSelectItem Value="TimePeriod.Month">Month</MudSelectItem>
+                <MudSelectItem Value="TimePeriod.Year">Year</MudSelectItem>
+                <MudSelectItem Value="TimePeriod.AllTime">All Time</MudSelectItem>
+            </MudSelect>
+
+            @if (RatingSeries.Any())
+            {
+                <MudChart ChartType="ChartType.Line"
+                ChartSeries="@RatingSeries"
+                ChartOptions="@ChartOptions"
+                Width="100%" Height="350px" />
+            }
+            else
+            {
+                <MudText>No rating data available.</MudText>
+            }
+        </MudPaper>
+
+        @if (User.HostingQuizzes?.Any() == true)
+        {
+            <MudCard Class="mb-6 pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Hosting Quizzes</MudText>
+                <MudList Dense="true" T="QuizMinimalDto">
+                    @foreach (var quiz in User.HostingQuizzes)
+                    {
+                        <MudListItem Class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <MudAvatar Size="Size.Medium" Class="mr-3">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Quiz)}{quiz.ProfileImage}")" 
+                                    Alt="@quiz.Name" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">@quiz.Name</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @quiz.Rating</MudText>
+                                    <MudText Typo="Typo.caption">Editions Hosted: @quiz.EditionsHosted</MudText>
+                                </div>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudCard>
+        }
+
+        @if (User.EditionsHosted?.Any() == true)
+        {
+            <MudCard Class="mb-6 pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Editions Hosted</MudText>
+                <MudList Dense="true" T="QuizEditionMinimalDto">
+                    @foreach (var edition in User.EditionsHosted)
+                    {
+                        <MudListItem Class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <MudAvatar Size="Size.Medium" Class="mr-3">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Edition)}{edition.ProfileImage}")" 
+                                    Alt="@edition.Name" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.subtitle1">@edition.Name</MudText>
+                                    <MudText Typo="Typo.caption">@edition.Category.Name</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @edition.Rating</MudText>
+                                    <MudText Typo="Typo.caption">@edition.Time.ToString("g")</MudText>
+                                </div>
+                            </div>
+                            <MudText Typo="Typo.subtitle2" Align="Align.Right">
+                                @edition.AcceptedTeams / @edition.MaxTeams
+                            </MudText>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudCard>
+        }
+
+        @if (User.CurrentTeams?.Any() == true)
+        {
+            <MudCard Class="mb-6 pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Current Teams</MudText>
+                <MudList Dense="true" T="TeamBreifDto">
+                    @foreach (var team in User.CurrentTeams)
+                    {
+                        <MudListItem Class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <MudAvatar Size="Size.Medium" Class="mr-3">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Team)}{team.ProfileImage}")" 
+                                    Alt="@team.Name" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <MudText Typo="Typo.subtitle1">@team.Name</MudText>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudCard>
+        }
+
+        @if (User.AttendedEditions?.Any() == true)
+        {
+            <MudCard Class="mb-6 pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Attended Editions</MudText>
+                <MudList Dense="true" T="QuizEditionResultForUserDto">
+                    @foreach (var attended in User.AttendedEditions)
+                    {
+                        <MudListItem Class="d-flex align-items-center justify-content-between">
+                            <div>
+                                <MudText Typo="Typo.subtitle1">@attended.Edition.Name</MudText>
+                                <MudText Typo="Typo.caption">@attended.Edition.Category.Name</MudText>
+                                <MudText Typo="Typo.caption">Rating: @attended.Edition.Rating</MudText>
+                                <MudText Typo="Typo.caption">@attended.Edition.Time.ToString("g")</MudText>
+                            </div>
+                            <div class="text-right">
+                                <MudText Typo="Typo.body2">Team: @attended.Team.Name</MudText>
+                                <MudText Typo="Typo.caption">Rating: @attended.Rating</MudText>
+                                <MudText Typo="Typo.caption">Rank: @attended.Rank?.ToString() ?? "N/A"</MudText>
+                                <MudText Typo="Typo.caption">Points: @attended.TeamPoints / @attended.TotalPoints</MudText>
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudCard>
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private UserInfo? UserInfo;
+    private OrganizationMinimalDto? org;
+    private List<QuizMinimalDto> avaliableQuizzes = new List<QuizMinimalDto>();
+    private UserDetailedDto? User;
+    private List<RatingHistoryDto>? RatingHistory;
+    private List<ChartSeries> RatingSeries = new();
+    private string[] XAxisLabels = Array.Empty<string>();
+    private ChartOptions ChartOptions = new() { InterpolationOption = InterpolationOption.Straight };
+    private TimePeriod _ratingPeriod = TimePeriod.Month;
+    private TimePeriod RatingPeriod
+    {
+        get => _ratingPeriod;
+        set
+        {
+            if (_ratingPeriod != value)
+            {
+                _ratingPeriod = value;
+                _ = LoadRatingHistory();
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        UserInfo = await UserInfoService.GetUserInfo();
+        User = await UserService.GetDetailedById(Id);
+        await LoadRatingHistory();
+        org = await UserInfoService.GetUserOrganization();
+        
+        if (org != null)
+            avaliableQuizzes = await OrganizationService.GetAvaliableQuizzesForNewHost(Id).ContinueWith(x => x.Result.ToList());
+    }
+
+    private async void OpenInviteDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { "HostId", Id },
+            { "Quizzes", avaliableQuizzes }
+        };
+
+        var options = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true };
+
+        var dialog = await DialogService.ShowAsync<InvitePlayerDialog>("Invite Host", parameters, options);
+
+        avaliableQuizzes = await OrganizationService.GetAvaliableQuizzesForNewHost(Id).ContinueWith(x => x.Result.ToList());
+    }
+
+    private async Task OnPeriodChanged(TimePeriod newPeriod)
+    {
+        RatingPeriod = newPeriod;
+        await LoadRatingHistory();
+    }
+
+    private async Task LoadRatingHistory()
+    {
+        RatingHistory = await UserService.GetRatingHistories(Id, RatingPeriod);
+
+        if (RatingHistory != null && RatingHistory.Any())
+        {
+            var ratingData = RatingHistory
+                .Select(r => (double)r.Rating)
+                .ToArray();
+
+            RatingSeries = new List<ChartSeries>
+            {
+                new ChartSeries
+                {
+                    Data = ratingData,
+                    LineDisplayType = LineDisplayType.Line,
+                    ShowDataMarkers = true
+                }
+            };
+        }
+        else
+        {
+            XAxisLabels = Array.Empty<string>();
+            RatingSeries.Clear();
+        }
+
+        StateHasChanged();
+    }
+
+    private string GetRoleName(int roleInt)
+    {
+        return roleInt switch
+        {
+            (int)Role.ADMIN => "Admin",
+            (int)Role.ORGANIZER => "Organizer",
+            (int)Role.ATTENDEE => "Attendee",
+            _ => "Unknown"
+        };
+    }
+}

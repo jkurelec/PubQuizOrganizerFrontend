@@ -15,5 +15,6 @@
         public int Rating { get; set; }
 
         public int Role { get; set; }
+        public string? ProfileImage { get; set; }
     }
 }

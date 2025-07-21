@@ -17,5 +17,6 @@ namespace PubQuizOrganizerFrontend.Models.Dto.QuizDto
         public IEnumerable<QCategoryDto> Categories { get; set; } = new List<QCategoryDto>();
         public IEnumerable<QuizEditionMinimalDto> QuizEditions { get; set; } = null!;
         public IEnumerable<TeamBreifDto> Teams { get; set; } = null!;
+        public string? ProfileImage { get; set; }
     }
 }

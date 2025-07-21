@@ -1,0 +1,539 @@
+﻿@page "/quiz/{quizId:int}"
+@attribute [Authorize]
+
+@inject IQuizService QuizService
+@inject IQuizCategoryService CategoryService
+@inject ILocationService LocationService
+@inject IOrganizationService OrganizationService
+@inject NavigationManager Navigation
+@inject UserInfoService UserInfoService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudPaper Class="pa-6 mt-4">
+
+    @if (quiz == null)
+    {
+        <MudProgressCircular Indeterminate />
+    }
+    else
+    {
+        <MudGrid Class="mb-4 d-flex align-items-center">
+            <MudItem>
+                <MudAvatar Size="Size.Large" Class="me-2">
+                    <PublicImage ImageName="@quiz.ProfileImage"
+                                 ResourceType="MediaServerResource.Quiz"
+                                 CssClass="img-fluid rounded"
+                                 IsEditable="userHost?.IsOwner ?? false"
+                                 OnEditClicked="HandleQuizImageUpload" />
+                </MudAvatar>
+            </MudItem>
+            <MudItem xs="12" sm="8" md="9">
+                @if (isEditingName)
+                {
+                    <MudTextField @bind-Value="quizName"
+                    Variant="Variant.Outlined"
+                    Immediate="true"
+                    AutoFocus="true"
+                    OnKeyDown="HandleNameKeyDown"
+                    Adornment="Adornment.End"
+                    AdornmentIcon="@Icons.Material.Filled.Save"
+                    OnAdornmentClick="SaveQuizName" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.h4">
+                        @quiz.Name
+                        @if (userHost?.IsOwner == true)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                            Color="Color.Primary"
+                            Size="Size.Small"
+                            Class="ms-2"
+                            OnClick="() => StartEditingName()" />
+                        }
+                    </MudText>
+                }
+
+                <MudText Typo="Typo.subtitle2">Rating: @quiz.Rating | Editions Hosted: @quiz.EditionsHosted</MudText>
+                <MudText Typo="Typo.body2">
+                    Organization:
+                    <MudLink Href="@($"/organization/{quiz.Organization.Id}")">@quiz.Organization.Name</MudLink>
+                </MudText>
+            </MudItem>
+        </MudGrid>
+
+        <MudTabs Rounded="true" Centered="true">
+            <!-- Upcoming Editions Tab -->
+            <MudTabPanel Text="Upcoming Editions">
+                @if (!upcomingEditions.Any())
+                {
+                    <MudText>No upcoming editions available.</MudText>
+                }
+                else
+                {
+                    <MudGrid>
+                        @foreach (var edition in upcomingEditions)
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Style="cursor: pointer;" @onclick="() => NavigateToEdition(edition.Id)">
+                                    <MudCardMedia Image="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Quiz)}{edition.ProfileImage}")"
+                                    Height="140" />
+                                    <MudCardContent>
+                                        <MudText Typo="Typo.h6">@edition.Name</MudText>
+                                        <MudText Typo="Typo.body2">@edition.Category.Name</MudText>
+                                        <MudText Typo="Typo.body2">@edition.Time.ToLocalTime():f</MudText>
+                                        <MudText Typo="Typo.body2">Rating: @edition.Rating</MudText>
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudTabPanel>
+
+            <!-- Past Editions Tab -->
+            <MudTabPanel Text="Past Editions">
+                @if (!pastEditions.Any())
+                {
+                    <MudText>No past editions available.</MudText>
+                }
+                else
+                {
+                    <MudList T="QuizEditionMinimalDto">
+                        @foreach (var edition in pastEditions)
+                        {
+                            <MudListItem Class="cursor-pointer" @onclick="() => NavigateToEdition(edition.Id)">
+                                <MudText Typo="Typo.subtitle2">@edition.Name</MudText>
+                                <MudText Typo="Typo.body2">@edition.Time.ToLocalTime():f | Rating: @edition.Rating</MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudTabPanel>
+
+            <!-- Hosts Tab -->
+            <MudTabPanel Text="Hosts">
+                @if (hosts == null || !hosts.Any())
+                {
+                    <MudText>No hosts assigned.</MudText>
+                }
+                else
+                {
+                    @foreach (var host in hosts)
+                    {
+                        <MudPaper Class="pa-3 mb-2">
+                            <MudGrid AlignItems="Center">
+                                <!-- Left: Profile Image -->
+                                <MudItem xs="12" sm="1" Class="d-flex justify-center">
+                                    <MudAvatar Size="Size.Large">
+                                        <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{host.UserBrief.ProfileImage}")"
+                                        Alt="@host.UserBrief.Username"
+                                        Style="width: 100%; height: 100%; object-fit: cover;" />
+                                    </MudAvatar>
+                                </MudItem>
+
+                                <!-- Middle: User Info -->
+                                <MudItem xs="12" sm="10">
+                                    <MudText Typo="Typo.subtitle1">@host.UserBrief.Username</MudText>
+                                    <MudText Typo="Typo.body2">@host.UserBrief.Email</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @host.UserBrief.Rating</MudText>
+                                </MudItem>
+
+                                <!-- Right: Remove Button (if allowed) -->
+                                @if (userHost?.IsOwner == true && !host.IsOwner)
+                                {
+                                    <MudItem xs="12" sm="1" Class="d-flex justify-end">
+                                        <MudTooltip Text="Remove Host">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                            Color="Color.Error"
+                                            OnClick="@(() => ConfirmRemoveHost(host))" />
+                                        </MudTooltip>
+                                    </MudItem>
+                                }
+
+                                <!-- Second Row: Full width for permissions -->
+                                <MudItem xs="12">
+                                    <MudExpansionPanels Class="mt-2">
+                                        <MudExpansionPanel Text="Permissions">
+                                            <MudStack Spacing="2">
+                                                @foreach (var prop in typeof(HostPermissionsDto).GetProperties())
+                                                {
+                                                    var value = (bool)(prop.GetValue(host.HostPermissions) ?? false);
+                                                    <MudButton StartIcon="@((value ? Icons.Material.Filled.Check : Icons.Material.Filled.Clear))"
+                                                    Color="@(value ? Color.Success : Color.Error)"
+                                                    Variant="Variant.Text"
+                                                    OnClick="() => TogglePermission(host, prop.Name)"
+                                                    FullWidth="true"
+                                                    Class="justify-start">
+                                                        @SplitPermissionName(prop.Name)
+                                                    </MudButton>
+                                                }
+                                            </MudStack>
+                                        </MudExpansionPanel>
+                                    </MudExpansionPanels>
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    }
+                }
+            </MudTabPanel>
+
+            <!-- Details Tab -->
+            <MudTabPanel Text="Details">
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    Categories
+                    @if (userHost?.IsOwner == true)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => isEditingCategories = !isEditingCategories)" />
+                    }
+                </MudText>
+
+                @if (isEditingCategories)
+                {
+                    <MudAutocomplete T="QCategoryDto"
+                    Value="selectedCategory"
+                    ValueChanged="AddCategory"
+                    ToStringFunc="c => c?.Name"
+                    SearchFunc="SearchCategories"
+                    Clearable="true"
+                    ResetValueOnEmptyText="true"
+                    DebounceInterval="300"
+                    Placeholder="Add category..." />
+
+                    <div class="d-flex flex-wrap mt-2">
+                        @foreach (var cat in quiz.Categories)
+                        {
+                            <MudChip T="QCategoryDto" OnClose="() => RemoveCategory(cat)" Closeable="true" Class="ma-1">@cat.Name</MudChip>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudChipSet T="QCategoryDto">
+                        @foreach (var cat in quiz.Categories)
+                        {
+                            <MudChip>@cat.Name</MudChip>
+                        }
+                    </MudChipSet>
+                }
+
+                <MudDivider Class="my-4" />
+
+                <MudText Typo="Typo.h6" Class="mb-2">
+                    Locations
+                    @if (userHost?.IsOwner == true)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => isEditingLocations = !isEditingLocations)" />
+                    }
+                </MudText>
+
+                @if (isEditingLocations)
+                {
+                    <MudAutocomplete T="LocationDetailedDto"
+                    Value="selectedLocation"
+                    ValueChanged="AddLocation"
+                    ToStringFunc="DisplayLocation"
+                    SearchFunc="SearchLocations"
+                    Clearable="true"
+                    ResetValueOnEmptyText="true"
+                    DebounceInterval="300"
+                    Placeholder="Add location..." />
+
+                    <div class="d-flex flex-wrap mt-2">
+                        @foreach (var loc in quiz.Locations)
+                        {
+                            <MudChip T="LocationBriefDto" OnClose="() => RemoveLocation(loc)" Closeable="true" Class="ma-1">
+                                @DisplayLocation(loc)
+                            </MudChip>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudList T="LocationBriefDto">
+                        @foreach (var loc in quiz.Locations)
+                        {
+                            <MudListItem>
+                                <MudAvatar Size="Size.Small" Class="me-2">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Location)}{loc.ProfileImage}")"
+                                    Alt="@loc.Name"
+                                    Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <MudText>@DisplayLocation(loc)</MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int quizId { get; set; }
+
+    private QuizDetailedDto? quiz;
+    private List<QuizEditionMinimalDto> upcomingEditions = new();
+    private List<QuizEditionMinimalDto> pastEditions = new();
+    private List<HostDto> hosts = new();
+    private UserInfo user = null!;
+    private HostDto? userHost;
+    private string quizName = string.Empty;
+    private bool isEditingName = false;
+    private bool isEditingCategories = false;
+    private bool isEditingLocations = false;
+    private QCategoryDto? selectedCategory;
+    private LocationDetailedDto? selectedLocation;
+    private List<QCategoryDto> allCategories = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        quiz = await QuizService.GetDetailedById(quizId);
+
+        if (quiz == null)
+        {
+            Navigation.NavigateTo("/", true);
+            return;
+        }
+
+        quizName = quiz.Name;
+
+        var now = DateTime.UtcNow;
+
+        upcomingEditions = quiz.QuizEditions
+            .Where(e => e.Time > now)
+            .OrderBy(e => e.Time)
+            .ToList();
+
+        pastEditions = quiz.QuizEditions
+            .Where(e => e.Time <= now)
+            .OrderByDescending(e => e.Time)
+            .ToList();
+
+        hosts = await OrganizationService.GetHostsByQuiz(quiz.Id).ContinueWith(x => x.Result.ToList());
+        user = await UserInfoService.GetUserInfo();
+
+        userHost = hosts.FirstOrDefault(x => x.UserBrief.Id == user.Id);
+
+        allCategories = await CategoryService.GetAll().ContinueWith(x => x.Result.ToList());
+    }
+
+    private void StartEditingName()
+    {
+        quizName = quiz!.Name;
+        isEditingName = true;
+    }
+
+    private async void SaveQuizName()
+    {
+        if (quiz == null || quizName == quiz.Name)
+        {
+            isEditingName = false;
+            return;
+        }
+
+        var updateDto = new NewQuizDto
+            {
+                Id = quiz.Id,
+                Name = quizName,
+                OrganizationId = quiz.Organization.Id,
+                Categories = quiz.Categories.Select(c => c.Id).ToList(),
+                Locations = quiz.Locations.Select(l => (int)l.Id!).ToList()
+            };
+
+        var updated = await QuizService.Update(updateDto);
+        if (updated != null)
+        {
+            quiz = updated;
+            Snackbar.Add("Quiz name updated.", Severity.Success);
+        }
+
+        isEditingName = false;
+
+        StateHasChanged();
+    }
+
+    private void HandleNameKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            SaveQuizName();
+        else if (e.Key == "Escape")
+        {
+            isEditingName = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TogglePermission(HostDto host, string permissionName)
+    {
+        if (userHost?.IsOwner != true)
+        {
+            Snackbar.Add("You do not have permission to change host permissions.", Severity.Error);
+
+            return;
+        }
+
+        var prop = typeof(HostPermissionsDto).GetProperty(permissionName);
+        if (prop == null) return;
+
+        var currentValue = (bool)(prop.GetValue(host.HostPermissions) ?? false);
+
+        prop.SetValue(host.HostPermissions, !currentValue);
+
+        var update = new NewHostDto
+            {
+                HostId = host.UserBrief.Id,
+                OrganizerId = quiz!.Organization.Id,
+                QuizId = quiz.Id,
+                HostPermissions = host.HostPermissions
+            };
+
+        var updatedHost = await OrganizationService.UpdateHost(update);
+        if (updatedHost != null)
+        {
+            var index = hosts.FindIndex(h => h.UserBrief.Id == updatedHost.UserBrief.Id);
+            if (index != -1)
+                hosts[index] = updatedHost;
+        }
+    }
+
+    private async Task ConfirmRemoveHost(HostDto host)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Are you sure you want to remove host {host.UserBrief.Username}?");
+        if (!confirmed)
+            return;
+
+        await OrganizationService.RemoveHostFromQuiz(
+            quiz!.Organization.Id,
+            host.UserBrief.Id,
+            quiz.Id
+        );
+
+        var hostToRemoveItem = hosts.FirstOrDefault(h => h.UserBrief.Id == host.UserBrief.Id);
+        if (hostToRemoveItem != null)
+        {
+            hosts.Remove(hostToRemoveItem);
+        }
+
+        Snackbar.Add($"{host.UserBrief.Username} removed from hosts.", Severity.Success);
+    }
+
+    private async Task<IEnumerable<LocationDetailedDto>> SearchLocations(string value, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await LocationService.Search(value, 10);
+        }
+        catch
+        {
+            return Array.Empty<LocationDetailedDto>();
+        }
+    }
+
+    private Task<IEnumerable<QCategoryDto>> SearchCategories(string value, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return Task.FromResult(allCategories.AsEnumerable());
+
+        return Task.FromResult(allCategories
+            .Where(c => c.Name.Contains(value, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private async Task AddCategory(QCategoryDto? category)
+    {
+        if (category is null || quiz!.Categories.Any(c => c.Id == category.Id))
+            return;
+
+        var newCats = quiz.Categories.ToList();
+        newCats.Add(new QCategoryDto { Id = category.Id });
+        quiz.Categories = newCats;
+        await SaveQuizChanges("Category added.");
+        selectedCategory = null;
+    }
+
+    private async Task AddLocation(LocationDetailedDto? location)
+    {
+        if (location is null || quiz!.Locations.Any(l => l.Id == location.Id))
+            return;
+
+        var newLocs = quiz.Locations.ToList();
+        newLocs.Add(new LocationBriefDto { Id = location.Id });
+        quiz.Locations = newLocs;
+        await SaveQuizChanges("Location added.");
+        selectedLocation = null;
+    }
+
+    private void RemoveCategory(QCategoryDto category)
+    {
+        var newCats = quiz!.Categories.ToList();
+        newCats.Remove(category);
+        quiz!.Categories = newCats;
+        _ = SaveQuizChanges("Category removed.");
+    }
+
+    private void RemoveLocation(LocationBriefDto location)
+    {
+        var newLocs = quiz!.Locations.ToList();
+        newLocs.Remove(location);
+        quiz!.Locations = newLocs;
+        _ = SaveQuizChanges("Location removed.");
+    }
+
+    private async Task SaveQuizChanges(string successMessage)
+    {
+        var dto = new NewQuizDto
+            {
+                Id = quiz!.Id,
+                Name = quiz.Name,
+                OrganizationId = quiz.Organization.Id,
+                Categories = quiz.Categories.Select(c => c.Id).ToList(),
+                Locations = quiz.Locations.Select(l => (int)l.Id!).ToList()
+            };
+
+        var updated = await QuizService.Update(dto);
+
+        if (updated != null)
+        {
+            quiz = updated;
+            Snackbar.Add(successMessage, Severity.Success);
+            StateHasChanged();
+        }
+        else
+        {
+            quiz = await QuizService.GetDetailedById(quizId);
+            Snackbar.Add("Something went wrong!", Severity.Error);
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleQuizImageUpload(IBrowserFile file)
+    {
+        try
+        {
+            var imageName = await QuizService.UpdateProfileImage(file, quiz!.Id);
+            quiz!.ProfileImage = $"{imageName}?v={Random.Shared.Next()}";
+            Snackbar.Add("Image uploaded successfully.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Image upload failed.", Severity.Error);
+        }
+    }
+
+    private void NavigateToEdition(int editionId)
+    {
+        Navigation.NavigateTo($"/edition/{editionId}");
+    }
+
+    private string SplitPermissionName(string name)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(name, "(\\B[A-Z])", " $1");
+    }
+
+    private string DisplayLocation(LocationDetailedDto loc) =>
+        loc == null ? string.Empty : $"{loc.Name} — {loc.Address}, {loc.City}, {loc.Country}";
+
+    private string DisplayLocation(LocationBriefDto loc) =>
+        loc == null ? string.Empty : $"{loc.Name} — {loc.Address}, {loc.City}, {loc.Country}";
+
+}

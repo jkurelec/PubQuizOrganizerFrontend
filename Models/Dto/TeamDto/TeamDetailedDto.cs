@@ -12,5 +12,6 @@ namespace PubQuizOrganizerFrontend.Models.Dto.TeamDto
         public QCategoryDto Category { get; set; } = null!;
         public QuizMinimalDto Quiz { get; set; } = null!;
         public IEnumerable<UserTeamDto> TeamMembers { get; set; } = new List<UserTeamDto>();
+        public string? ProfileImage { get; set; }
     }
 }

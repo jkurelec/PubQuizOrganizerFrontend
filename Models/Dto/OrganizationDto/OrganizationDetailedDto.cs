@@ -11,5 +11,6 @@ namespace PubQuizOrganizerFrontend.Models.Dto.OrganizationDto
         public UserBriefDto Owner { get; set; } = null!;
         public List<UserBriefDto> Hosts { get; set; } = null!;
         public List<QuizMinimalDto> Quizzes { get; set; } = null!;
+        public string? ProfileImage { get; set; }
     }
 }

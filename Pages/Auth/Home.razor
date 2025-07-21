@@ -1,0 +1,153 @@
+﻿@page "/"
+@attribute [Authorize]
+
+@inject UserInfoService UserInfoService
+@inject IOrganizationService OrganizationService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudGrid>
+    <MudItem xs="12" md="8">
+        <MudText Typo="Typo.h4" Class="mb-4">Your Organizations</MudText>
+
+        @if (organizations == null)
+        {
+            <MudProgressCircular Indeterminate="true" />
+        }
+        else if (!organizations.Any())
+        {
+            <MudText>No organizations found.</MudText>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var org in organizations)
+                {
+                    <MudItem sm="12" md="6">
+                        <MudCard Style="cursor:pointer" @onclick="() => OnOrganizationClicked(org)">
+                            <MudCardContent Class="d-flex align-items-center">
+                                <PublicImage ImageName="@org.ProfileImage"
+                                    ResourceType="MediaServerResource.Organization"
+                                    CssClass="me-3 img-fluid rounded w-auto" />
+                                <div>
+                                    <MudText Typo="Typo.h6">@org.Name</MudText>
+                                    <MudText Typo="Typo.caption">ID: @org.Id</MudText>
+                                </div>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudItem>
+
+    <MudItem xs="12" md="4">
+        <MudPaper Class="p-4">
+            <MudText Typo="Typo.h6">Invitations</MudText>
+            @if (invitations == null)
+            {
+                <MudProgressCircular Indeterminate="true" />
+            }
+            else if (!invitations.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No invitations</MudText>
+            }
+            else
+            {
+                @foreach (var invite in invitations)
+                {
+                    <MudPaper Class="p-2 mb-2 d-flex justify-content-between align-items-center">
+                        <div>
+                            <MudText Typo="Typo.subtitle2">@invite.Quiz.Name</MudText>
+                        </div>
+                        <div>
+                            <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" OnClick="() => RespondToInvitation(invite.InvitationId, true)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" OnClick="() => RespondToInvitation(invite.InvitationId, false)" />
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudPaper>
+
+        @if (!isOwner)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Class="mt-3"
+            OnClick="NavigateToCreateOrganization">
+                Create Organization
+            </MudButton>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private UserInfo userInfo = null!;
+    private bool isOwner = false;
+    private List<OrganizationMinimalDto>? organizations;
+    private List<QuizInvitationDto>? invitations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userInfo = await UserInfoService.GetUserInfo();
+
+        try
+        {
+            if (userInfo.Role != 1)
+            {
+                var org = await UserInfoService.GetUserOrganization();
+
+                if (org != null)
+                    isOwner = true;
+
+                var orgSet = await UserInfoService.UserOrganizationSet();
+
+                if (!orgSet)
+                {
+                    org = await OrganizationService.GetOwnerOrganization();
+
+                    if (org != null)
+                        isOwner = true;
+
+                    await UserInfoService.SetUserOrganization(org);
+                }
+
+                var orgs = await OrganizationService.GetByHost();
+                organizations = orgs.ToList();
+            }
+            else
+            {
+                organizations = new();
+            }
+
+            var invites = await OrganizationService.GetInvitations();
+            invitations = invites.ToList();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to load data.", Severity.Error);
+        }
+    }
+
+    private void OnOrganizationClicked(OrganizationMinimalDto org)
+    {
+        Navigation.NavigateTo($"organization/{org.Id}");
+    }
+
+    private async Task RespondToInvitation(int id, bool accepted)
+    {
+        try
+        {
+            await OrganizationService.RespondToInvitation(new ApplicationResponseDto(id, accepted));
+            invitations = invitations?.Where(x => x.InvitationId != id).ToList();
+            Snackbar.Add($"Invitation {(accepted ? "accepted" : "declined")}.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Failed to respond to invitation.", Severity.Error);
+        }
+    }
+
+    private void NavigateToCreateOrganization()
+    {
+        Navigation.NavigateTo("/create-organization");
+    }
+}

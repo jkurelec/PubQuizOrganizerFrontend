@@ -1,0 +1,129 @@
+﻿@page "/create-location"
+
+@inject ISnackbar Snackbar
+@inject ILocationService LocationService
+@inject IJSRuntime JSRuntime
+
+<h3>Create New Location</h3>
+
+<div class="my-2">
+    <label>Location Name:</label>
+    <input @bind="locationName" class="form-control" />
+</div>
+<div class="my-2">
+    <label>Address:</label>
+    <input @bind="address" class="form-control" />
+</div>
+<div class="my-2">
+    <label>City:</label>
+    <input @bind="city" class="form-control" />
+</div>
+<div class="my-2">
+    <label>Country:</label>
+    <input @bind="country" class="form-control" />
+</div>
+
+<div class="my-3">
+    <button class="btn btn-primary" @onclick="SearchLocations" disabled="@isLoading">
+        @(isLoading ? "Searching..." : "Search")
+    </button>
+</div>
+
+@if (searchResults?.Count > 0)
+{
+    <h5>Search Results</h5>
+    <ul class="list-group">
+        @for (int i = 0; i < searchResults.Count; i++)
+        {
+            var loc = searchResults[i];
+            int localIndex = i;
+
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>@loc.Name</strong><br />
+                    <small>@loc.Address, @loc.City, @loc.Country</small>
+                </div>
+                <div>
+                    @if (existenceMap.TryGetValue(localIndex, out bool exists) && exists)
+                    {
+                        <span class="text-muted">Already exists</span>
+                    }
+                    else
+                    {
+                        <button class="btn btn-success btn-sm" @onclick="() => AddLocation(localIndex)" disabled="@isAdding">
+                            Add
+                        </button>
+                    }
+                </div>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private string? locationName;
+    private string? address;
+    private string? city;
+    private string? country;
+
+    private bool isLoading = false;
+    private bool isAdding = false;
+
+    private List<LocationDetailedDto> searchResults = new();
+    private Dictionary<int, bool> existenceMap = new();
+
+    private async Task SearchLocations()
+    {
+        searchResults.Clear();
+        existenceMap.Clear();
+        isLoading = true;
+
+        try
+        {
+            searchResults = await LocationService.FindNew(locationName, address, city, country, 10);
+
+            for (int i = 0; i < searchResults.Count; i++)
+            {
+                var loc = searchResults[i];
+                var existing = await LocationService.CheckIfExists(loc.Name, loc.Address, loc.City, loc.Country);
+                existenceMap[i] = existing != null;
+            }
+
+            Snackbar.Add("Search completed successfully.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to fetch locations: {ex.Message}", Severity.Error);
+        }
+
+        isLoading = false;
+    }
+
+    private async Task AddLocation(int index)
+    {
+        if (index < 0 || index >= searchResults.Count)
+            return;
+
+        var loc = searchResults[index];
+        isAdding = true;
+
+        try
+        {
+            var result = await LocationService.Add(loc);
+
+            if (result != null)
+            {
+                Snackbar.Add("Location added successfully.", Severity.Success);
+                await JSRuntime.InvokeVoidAsync("history.back");
+            }
+            else
+                Snackbar.Add("Failed to add location.", Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding location: {ex.Message}", Severity.Error);
+        }
+
+        isAdding = false;
+    }
+}

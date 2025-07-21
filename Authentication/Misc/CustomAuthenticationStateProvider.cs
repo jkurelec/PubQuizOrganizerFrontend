@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.WebAssembly.Http;
+using PubQuizBackend.Util;
 using PubQuizOrganizerFrontend.Authentication.Interfaces;
 using PubQuizOrganizerFrontend.Models.Auth;
 using System.Net.Http.Json;
@@ -20,7 +21,7 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
 
         public override async Task<AuthenticationState> GetAuthenticationStateAsync()
         {
-            var userInfo = await _userInfoService.GetUserInfoAsync();
+            var userInfo = await _userInfoService.GetUserInfo();
 
             if (userInfo == null)
                 return new AuthenticationState(new ClaimsPrincipal());
@@ -47,6 +48,8 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
             var claims = JwtParser.ParseClaimsFromJwt(token);
             var identity = new ClaimsIdentity(claims, "jwt");
             var user = new ClaimsPrincipal(identity);
+            var role = claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
+            var intRole = CustomConverter.GetIntRole(role!);
 
             if (!int.TryParse(user.FindFirst("sub")?.Value, out int id))
                 throw new InvalidOperationException("User ID claim is missing or invalid.");
@@ -54,12 +57,12 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
             var teamIdClaim = user.FindFirst("teamId")?.Value;
             int? teamId = int.TryParse(teamIdClaim, out var tid) ? tid : null;
 
-            await _userInfoService.SetUserInfoAsync(
+            await _userInfoService.SetUserInfo(
                 new()
                 {
                     Id = id,
-                    Username = user.FindFirst(c => c.Type == ClaimTypes.Name)?.Value,
-                    TeamId = teamId
+                    Username = user.FindFirst(c => c.Type == ClaimTypes.Name)?.Value!,
+                    Role = intRole
                 }
             );
 
@@ -70,7 +73,7 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
         {
             var anonymous = new ClaimsPrincipal(new ClaimsIdentity());
 
-            await _userInfoService.ClearUserInfoAsync();
+            await _userInfoService.ClearUserInfo();
 
             NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(anonymous)));
         }
@@ -91,7 +94,12 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
                 var response = await httpClient.SendAsync(refreshRequest);
 
                 if (!response.IsSuccessStatusCode)
+                {
+                    await NotifyUserLogout();
+
                     return false;
+                }
+                    
 
                 var result = await response.Content.ReadFromJsonAsync<AccessTokenResponse>();
 

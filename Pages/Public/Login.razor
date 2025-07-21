@@ -2,6 +2,8 @@
 
 @inject NavigationManager Navigation
 @inject IAuthService AuthService
+@inject IOrganizationService OrganizationService
+@inject UserInfoService UserInfoService
 
 <MudPaper Class="pa-6 mx-auto mt-12" Style="max-width:400px">
     <MudText Typo="Typo.h5" Class="mb-4">Login</MudText>
@@ -30,6 +32,7 @@
     {
         error = null;
         bool success = await AuthService.LoginAsync(loginModel);
+
         if (success)
         {
             Navigation.NavigateTo("/");

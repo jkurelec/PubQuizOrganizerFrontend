@@ -1,0 +1,114 @@
+﻿@page "/create-organization"
+@inject IOrganizationService OrganizationService
+@inject ISnackbar Snackbar
+@inject UserInfoService UserInfoService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+
+<MudPaper Class="pa-4 mx-auto">
+    <MudText Typo="Typo.h5" Class="mb-4">Create Organization</MudText>
+
+    <MudTextField Label="Organization Name" @bind-Value="organizationName" @ref="inputRef" Required="true" Immediate="true"
+    OnKeyDown="@(e => OnKeyDown(e))" />
+
+    @if (loading)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" Class="my-4" />
+    }
+
+    <MudGrid Class="mt-4">
+        <MudItem xs="12" Class="d-flex justify-end">
+            <MudButton Color="Color.Secondary" OnClick="Cancel">Cancel</MudButton>
+            <MudButton Color="Color.Primary" OnClick="CreateTheOrganization" Disabled="@(string.IsNullOrWhiteSpace(organizationName) || loading)" Class="ml-2">Create</MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@code {
+    private string organizationName = string.Empty;
+    private bool loading = false;
+    private MudTextField<string>? inputRef;
+    private UserInfo userInfo = null!;
+    private OrganizationMinimalDto? organization;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userInfo = await UserInfoService.GetUserInfo();
+        organization = await OrganizationService.GetOwnerOrganization();
+
+        if (organization != null)
+            NavigationManager.NavigateTo("/my-organization", true);
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && inputRef != null)
+        {
+            await Task.Delay(50);
+            await inputRef.FocusAsync();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Cancel();
+        }
+        else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(organizationName) && !loading)
+        {
+            await CreateTheOrganization();
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/");
+    }
+
+    private async Task CreateTheOrganization()
+    {
+        if (string.IsNullOrWhiteSpace(organizationName))
+            return;
+
+        loading = true;
+        try
+        {
+            var newOrg = new NewOrganizationDto
+                {
+                    Name = organizationName,
+                    OwnerId = userInfo.Id
+                };
+
+            var organization = await OrganizationService.Add(newOrg);
+
+            if (organization != null)
+            {
+                Snackbar.Add("Organization created successfully.", Severity.Success);
+                Snackbar.Add("You can change the profile picture later..", Severity.Info);
+                await UserInfoService.SetUserOrganization(
+                    new()
+                    {
+                        Id = organization.Id,
+                        Name = organization.Name
+                    }
+                );
+
+                NavigationManager.NavigateTo($"/create-quiz");
+            }
+            else
+            {
+                Snackbar.Add("Failed to create organization.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to create organization: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

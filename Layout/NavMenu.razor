@@ -2,46 +2,62 @@
 @inject NavigationManager Navigation
 @inject IAuthService AuthService
 
-<MudDrawer Open="true" Variant="DrawerVariant.Responsive">
-    <MudNavMenu>
-        <MudText Typo="Typo.h6" Class="pa-4">PubQuiz</MudText>
+<MudNavMenu>
+    <MudText Typo="Typo.h6" Class="pa-4">PubQuiz</MudText>
 
-        <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
+    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Home">Home</MudNavLink>
 
-        @if (IsAuthenticated)
-        {
-            <MudNavLink Href="profile" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
-            <MudNavLink Href="my-teams" Icon="@Icons.Material.Filled.People">Teams</MudNavLink>
-            <MudButton StartIcon="@Icons.Material.Filled.Logout"
-                       Color="Color.Inherit"
-                       Variant="Variant.Text"
-                       OnClick="@Logout"
-                       Class="mud-nav-link px-4">
-                Logout
-            </MudButton>
-        }
-        else
-        {
-            <MudNavLink Href="login" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
-        }
-    </MudNavMenu>
-</MudDrawer>
+    @if (IsOwner)
+    {
+        <MudNavLink Href="@("organization/" + org!.Id)" Icon="@Icons.Material.Filled.Domain">My Organization</MudNavLink>
+    }
+
+    @if (IsAuthenticated)
+    {
+        <MudNavLink Href="search-users" Icon="@Icons.Material.Filled.PersonSearch">SearchUsers</MudNavLink>
+        <MudNavLink Href="profile" Icon="@Icons.Material.Filled.Person">Profile</MudNavLink>
+        <MudButton StartIcon="@Icons.Material.Filled.Logout"
+                   Color="Color.Inherit"
+                   Variant="Variant.Text"
+                   OnClick="@Logout"
+                   Class="mud-nav-link px-4">
+            Logout
+        </MudButton>
+    }
+    else
+    {
+        <MudNavLink Href="login" Icon="@Icons.Material.Filled.Login">Login</MudNavLink>
+    }
+</MudNavMenu>
 
 @code {
     private bool IsAuthenticated;
+    private bool IsOwner;
+    private OrganizationMinimalDto? org = null!;
 
     protected override async Task OnInitializedAsync()
     {
-        var user = await UserInfoService.GetUserInfoAsync();
+        var user = await UserInfoService.GetUserInfo();
         IsAuthenticated = user != null;
 
+        org = await UserInfoService.GetUserOrganization();
+        IsOwner = org != null;
+
         UserInfoService.UserInfoChanged += OnUserInfoChanged;
+        UserInfoService.UserOrgChanged += OnUserOrgChanged;
     }
 
-    private void OnUserInfoChanged(UserInfo? userInfo)
+    private async void OnUserInfoChanged(UserInfo? userInfo)
     {
         IsAuthenticated = userInfo != null;
-        InvokeAsync(StateHasChanged);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async void OnUserOrgChanged(OrganizationMinimalDto? organization)
+    {
+        org = organization;
+        IsOwner = organization != null;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task Logout()
@@ -53,5 +69,6 @@
     public void Dispose()
     {
         UserInfoService.UserInfoChanged -= OnUserInfoChanged;
+        UserInfoService.UserOrgChanged -= OnUserOrgChanged;
     }
 }

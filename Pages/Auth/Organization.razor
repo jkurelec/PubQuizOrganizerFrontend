@@ -1,0 +1,506 @@
+﻿@page "/organization/{id:int}"
+
+@inject IQuizService QuizService
+@inject IOrganizationService OrganizationService
+@inject UserInfoService UserInfoService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudGrid Class="mb-4">
+    <MudItem xs="2" sm="1" Class="d-flex justify-center">
+        @if (org != null)
+        {
+            <MudAvatar Size="Size.Large" Class="me-2">
+                <PublicImage ImageName="@org.ProfileImage"
+                ResourceType="MediaServerResource.Organization"
+                CssClass="img-fluid rounded"
+                IsEditable="IsOwner"
+                OnEditClicked="HandleOrganizationImageUpload" />
+            </MudAvatar>
+        }
+    </MudItem>
+
+    <MudItem xs="10" sm="11" Class="d-flex flex-column justify-center">
+        <div class="d-flex align-items-center">
+            @if (isEditingName)
+            {
+                <div>
+                    <MudTextField @bind-Value="editableOrganizationName"
+                    Immediate="true"
+                    Variant="Variant.Text"
+                    Size="Size.Small"
+                    OnKeyDown="HandleKeyDown" />
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                    <MudButton Color="Color.Primary"
+                    Variant="Variant.Filled"
+                    Size="Size.Small"
+                    OnClick="SaveOrganizationName">
+                        Save
+                    </MudButton>
+                    <MudButton Color="Color.Secondary"
+                    Variant="Variant.Text"
+                    Size="Size.Small"
+                    OnClick="CancelEdit">
+                        Cancel
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.h5" Class="me-2">@OrganizationName</MudText>
+                @if (IsOwner)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                    Size="Size.Small"
+                    Color="Color.Primary"
+                    OnClick="EnableEdit" />
+                }
+            }
+        </div>
+        <MudText Typo="Typo.subtitle2">Owner: @OrganizationOwnerName</MudText>
+    </MudItem>
+</MudGrid>
+<MudGrid>
+    <MudItem xs="12" md="8">
+        <MudPaper Class="pa-4">
+            @if (IsOwner)
+            {
+                <div class="d-flex justify-end mb-4">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Href="/create-quiz"
+                               StartIcon="@Icons.Material.Filled.Add">
+                        Create Quiz
+                    </MudButton>
+                </div>
+            }
+            @if (quizzes == null)
+            {
+                <MudText>Loading quizzes...</MudText>
+            }
+            else if (!quizzes.Any())
+            {
+                <MudText>No quizzes found for this organization.</MudText>
+            }
+            else
+            {
+                <MudGrid>
+                    @foreach (var quiz in quizzes)
+                    {
+                        <MudItem xs="12" sm="6" md="4" Style="cursor: pointer;" @onclick="() => NavigateToQuiz(quiz.Id)">
+                            <MudCard Class="h-100">
+                                <PublicImage ImageName="@quiz.ProfileImage"
+                                ResourceType="MediaServerResource.Quiz"
+                                CssClass="me-3 img-fluid rounded w-auto" />
+
+                                <MudCardContent>
+                                    <MudText Typo="Typo.h6">@quiz.Name</MudText>
+                                    <MudText Typo="Typo.body2">Rating: @quiz.Rating</MudText>
+                                    <MudText Typo="Typo.body2">Editions Hosted: @quiz.EditionsHosted</MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="4">
+        <MudPaper Class="pa-4">
+            <!-- Hosts Section -->
+            <MudText Typo="Typo.h6" Class="mb-2">Hosts</MudText>
+
+            @if (hosts == null)
+            {
+                <MudProgressCircular Indeterminate />
+            }
+            else if (!hosts.Any())
+            {
+                <MudText>No hosts found.</MudText>
+            }
+            else
+            {
+                @foreach (var host in hosts)
+                {
+                    var isHostExpanded = expandedHostId == host.UserBrief.Id;
+
+                    <MudPaper Class="pa-2 my-2">
+                        <MudButton Variant="Variant.Text" Style="width: 100%; text-align: left;" OnClick="@(() => ToggleHost(host.UserBrief.Id))">
+                            <div class="d-flex align-items-start" style="width: 100%;">
+                                <MudAvatar Size="Size.Medium" Class="mr-2">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{host.UserBrief.ProfileImage}")"
+                                    Alt=@($"Profile image of {host.UserBrief.Username}")
+                                    Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+
+                                <div style="flex: 1;">
+                                    <MudText Typo="Typo.subtitle2">
+                                        @host.UserBrief.Username
+                                        @if (host.IsOwner)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" Size="Size.Small" />
+                                        }
+                                    </MudText>
+                                    <MudText Typo="Typo.caption">@host.UserBrief.Email</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @host.UserBrief.Rating</MudText>
+                                </div>
+
+                                <MudIcon Icon="@(isHostExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                            </div>
+                        </MudButton>
+
+                        @if (isHostExpanded)
+                        {
+                            <MudList T="QuizPermissionDto" Dense="true" Class="mt-1">
+                                @foreach (var quiz in host.QuizPermissions)
+                                {
+                                    var quizKey = $"{host.UserBrief.Id}-{quiz.QuizId}";
+                                    var isQuizExpanded = expandedQuizKey == quizKey;
+
+                                    <MudListItem Class="pa-1">
+                                        <div class="d-flex justify-content-between align-items-center" style="width: 100%;">
+                                            <MudText Typo="Typo.subtitle2">@quiz.QuizName</MudText>
+                                            <div class="d-flex align-items-center">
+                                                @if (IsOwner && !host.IsOwner)
+                                                {
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                    Color="Color.Error"
+                                                    Size="Size.Small"
+                                                    Class="mr-1"
+                                                    OnClick="@(() => RemoveHostFromQuiz(id, host.UserBrief.Id, quiz.QuizId))" />
+                                                }
+
+                                                <MudIconButton Icon="@(isQuizExpanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                                                OnClick="@(() => ToggleQuiz(quizKey))"
+                                                Size="Size.Small" />
+                                            </div>
+                                        </div>
+
+                                        @if (isQuizExpanded)
+                                        {
+                                            <div class="d-flex flex-column ml-2 mt-1">
+                                                @if (IsOwner)
+                                                {
+                                                    @InteractivePermissionRow("Create Edition", quiz.Permissions.CreateEdition, EventCallback.Factory.Create(this, () => TogglePermission(host, quiz, p => p.CreateEdition = !p.CreateEdition)))
+                                                    @InteractivePermissionRow("Edit Edition", quiz.Permissions.EditEdition, EventCallback.Factory.Create(this, () => TogglePermission(host, quiz, p => p.EditEdition = !p.EditEdition)))
+                                                    @InteractivePermissionRow("Delete Edition", quiz.Permissions.DeleteEdition, EventCallback.Factory.Create(this, () => TogglePermission(host, quiz, p => p.DeleteEdition = !p.DeleteEdition)))
+                                                    @InteractivePermissionRow("CRUD Question", quiz.Permissions.CrudQuestion, EventCallback.Factory.Create(this, () => TogglePermission(host, quiz, p => p.CrudQuestion = !p.CrudQuestion)))
+                                                    @InteractivePermissionRow("Manage Application", quiz.Permissions.ManageApplication, EventCallback.Factory.Create(this, () => TogglePermission(host, quiz, p => p.ManageApplication = !p.ManageApplication)))
+                                                }
+                                                else
+                                                {
+                                                    @PermissionRow("Create Edition", quiz.Permissions.CreateEdition)
+                                                    @PermissionRow("Edit Edition", quiz.Permissions.EditEdition)
+                                                    @PermissionRow("Delete Edition", quiz.Permissions.DeleteEdition)
+                                                    @PermissionRow("CRUD Question", quiz.Permissions.CrudQuestion)
+                                                    @PermissionRow("Manage Application", quiz.Permissions.ManageApplication)
+                                                }
+                                            </div>
+                                        }
+                                    </MudListItem>
+                                }
+                            </MudList>
+
+                            @if (!host.IsOwner && IsOwner)
+                            {
+                                <div class="mt-2 d-flex justify-center">
+                                    <MudButton Color="Color.Primary" Variant="Variant.Filled" @onclick="() => ToggleTransferPopup(host.UserBrief.Id)" id="@GetTransferButtonId(host.UserBrief.Id)">
+                                        Transfer ownership
+                                    </MudButton>
+
+                                    <MudPopover Open="@(_transferPopupHostId == host.UserBrief.Id)"
+                                    AnchorOrigin="Origin.BottomCenter"
+                                    TransformOrigin="Origin.TopCenter" >
+                                        <div style="padding: 16px; max-width: 240px;">
+                                            <MudText Typo="Typo.subtitle2" Class="mb-2">Confirm transfer ownership?</MudText>
+                                            <div class="d-flex justify-between">
+                                                <MudButton Color="Color.Primary" Size="Size.Small" OnClick="@(async () => await ConfirmTransfer(host.UserBrief.Id))">Yes</MudButton>
+                                                <MudButton Color="Color.Secondary" Size="Size.Small" OnClick="CancelTransfer">No</MudButton>
+                                            </div>
+                                        </div>
+                                    </MudPopover>
+                                </div>
+                            }
+                        }
+                    </MudPaper>
+                }
+            }
+
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.h6" Class="mb-2">Pending Invitations</MudText>
+
+            @if (pendingInvitations == null)
+            {
+                <MudProgressCircular Indeterminate />
+            }
+            else if (!pendingInvitations.Any())
+            {
+                <MudText>No pending invitations found.</MudText>
+            }
+            else
+            {
+                @foreach (var invitation in pendingInvitations)
+                {
+                    <MudPaper Class="pa-2 my-2 d-flex" Style="align-items: flex-start;">
+                        <MudAvatar Size="Size.Large" Class="mr-2">
+                            <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{invitation.User.ProfileImage}")"
+                            Alt=@($"Profile image of {invitation.User.Username}")
+                            Style="width: 100%; height: 100%; object-fit: cover;" />
+                        </MudAvatar>
+
+                        <div style="flex: 1;">
+                            <MudText Typo="Typo.subtitle1">@invitation.User.Username</MudText>
+                            <MudText Typo="Typo.body2">For: @invitation.Quiz.Name</MudText>
+                        </div>
+                    </MudPaper>
+                }
+            }
+        </MudPaper>
+    </MudItem> 
+</MudGrid>
+
+@code {
+    [Parameter] public int id { get; set; }
+
+    private OrganizationBriefDto org = null!;
+    private IEnumerable<QuizMinimalDto>? quizzes;
+    private IEnumerable<HostQuizzesDto>? hosts;
+    private string OrganizationName = string.Empty;
+    private string OrganizationOwnerName = string.Empty;
+    private UserInfo userInfo = null!;
+    private bool IsOwner = false;
+    private IEnumerable<QuizInvitationDto>? pendingInvitations;
+    private int? expandedHostId;
+    private string? expandedQuizKey;
+    private bool isEditingName = false;
+    private string editableOrganizationName = "";
+    private int? _transferPopupHostId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var organization = await OrganizationService.GetById(id);
+
+        if (organization == null)
+            Navigation.NavigateTo("/", true);
+
+        org = organization!;
+
+        OrganizationName = org.Name;
+
+        userInfo = await UserInfoService.GetUserInfo();
+
+        if (userInfo.Id == org.Owner.Id)
+        {
+            IsOwner = true;
+            OrganizationOwnerName = "You";
+        }
+        else
+        {
+            IsOwner = false;
+            OrganizationOwnerName = org.Owner.Username;
+        }
+
+        quizzes = await QuizService.GetByHostAndOrganization(id);
+        hosts = await OrganizationService.GetHostsFromOrganization(id);
+        pendingInvitations = await OrganizationService.GetOrganizationPendingQuizInvitations();
+    }
+
+    private void NavigateToQuiz(int quizId)
+    {
+        Navigation.NavigateTo($"/quiz/{quizId}");
+    }
+    private void ToggleHost(int hostId)
+    {
+        expandedHostId = expandedHostId == hostId ? null : hostId;
+        expandedQuizKey = null;
+    }
+
+    private void ToggleQuiz(string quizKey)
+    {
+        expandedQuizKey = expandedQuizKey == quizKey ? null : quizKey;
+    }
+
+    private RenderFragment InteractivePermissionRow(string label, bool value, EventCallback onToggle) => __builder =>
+    {
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "d-flex justify-between align-items-center mb-1");
+        __builder.AddAttribute(2, "style", "font-size: 0.75rem; line-height: 1; cursor: pointer;");
+        __builder.AddAttribute(3, "onclick", EventCallback.Factory.Create(this, onToggle));
+
+        __builder.OpenElement(4, "span");
+        __builder.AddContent(5, label);
+        __builder.CloseElement();
+
+        __builder.OpenComponent<MudIcon>(6);
+        __builder.AddAttribute(7, "Icon", value ? Icons.Material.Filled.Check : Icons.Material.Filled.Close);
+        __builder.AddAttribute(8, "Color", value ? Color.Success : Color.Error);
+        __builder.AddAttribute(9, "Size", Size.Small);
+        __builder.CloseComponent();
+
+        __builder.CloseElement();
+    };
+
+    private async Task TogglePermission(HostQuizzesDto host, QuizPermissionDto quiz, Action<HostPermissionsDto> toggleAction)
+    {
+        toggleAction(quiz.Permissions);
+
+        var dto = new NewHostDto
+            {
+                OrganizerId = id,
+                HostId = host.UserBrief.Id,
+                QuizId = quiz.QuizId,
+                HostPermissions = quiz.Permissions
+            };
+
+        var updated = await OrganizationService.UpdateHost(dto);
+
+        if (updated == null)
+        {
+            toggleAction(quiz.Permissions);
+            Snackbar.Add("Failed to update permission", Severity.Error);
+        }
+    }
+
+    private RenderFragment PermissionRow(string label, bool value) => __builder =>
+    {
+        __builder.OpenElement(0, "div");
+        __builder.AddAttribute(1, "class", "d-flex justify-between align-items-center mb-1");
+        __builder.AddAttribute(2, "style", "font-size: 0.75rem; line-height: 1;");
+
+        __builder.AddContent(3, label);
+
+        __builder.OpenComponent<MudIcon>(4);
+        __builder.AddAttribute(5, "Icon", value ? Icons.Material.Filled.Check : Icons.Material.Filled.Close);
+        __builder.AddAttribute(6, "Color", value ? Color.Success : Color.Error);
+        __builder.AddAttribute(7, "Size", Size.Small);
+        __builder.CloseComponent();
+
+        __builder.CloseElement();
+    };
+
+    private async Task RemoveHostFromQuiz(int organizerId, int hostId, int quizId)
+    {
+        try
+        {
+            await OrganizationService.RemoveHostFromQuiz(organizerId, hostId, quizId);
+            Snackbar.Add("Host removed from quiz.", Severity.Success);
+
+            var host = hosts!.FirstOrDefault(h => h.UserBrief.Id == hostId);
+            var quiz = host?.QuizPermissions.FirstOrDefault(q => q.QuizId == quizId);
+            if (quiz != null)
+                host!.QuizPermissions.Remove(quiz);
+
+            StateHasChanged();
+        }
+        catch
+        {
+            Snackbar.Add("Failed to remove host from quiz.", Severity.Error);
+        }
+    }
+
+    private async Task HandleOrganizationImageUpload(IBrowserFile file)
+    {
+        try
+        {
+            var imageName = await OrganizationService.UpdateProfileImage(file);
+            org.ProfileImage = $"{imageName}?v={Random.Shared.Next()}";
+            Snackbar.Add("Image uploaded successfully.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Image upload failed.", Severity.Error);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        editableOrganizationName = OrganizationName;
+    }
+
+    private void EnableEdit()
+    {
+        isEditingName = true;
+    }
+
+    private void CancelEdit()
+    {
+        isEditingName = false;
+        editableOrganizationName = OrganizationName;
+    }
+
+    private async Task SaveOrganizationName()
+    {
+        OrganizationName = editableOrganizationName;
+        isEditingName = false;
+
+        var responseOrg = await OrganizationService.Update(
+            new OrganizationUpdateDto
+            {
+                Id = org.Id,
+                Name = editableOrganizationName,
+                OwnerId = org.Owner.Id
+            }
+        );
+
+        if (responseOrg != null)
+            org = responseOrg;
+        else
+            Snackbar.Add("Failed to update name", Severity.Error);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveOrganizationName();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelEdit();
+        }
+    }
+
+    void ToggleTransferPopup(int hostId)
+    {
+        if (_transferPopupHostId == hostId)
+            _transferPopupHostId = null;
+        else
+            _transferPopupHostId = hostId;
+    }
+
+    private async Task ConfirmTransfer(int hostId)
+    {
+        _transferPopupHostId = null;
+
+        var responseOrg = await OrganizationService.Update(
+            new OrganizationUpdateDto
+            {
+                Id = org.Id,
+                Name = editableOrganizationName,
+                OwnerId = hostId
+            }
+        );
+
+        if (responseOrg == null)
+            Snackbar.Add("Failed to transfer ownership", Severity.Error);
+
+        await OnInitializedAsync();
+
+        await Task.Delay(10);
+
+        StateHasChanged();
+    }
+
+    void CancelTransfer()
+    {
+        _transferPopupHostId = null;
+    }
+
+    string GetTransferButtonId(int hostId) => $"transferBtn_{hostId}";
+
+}

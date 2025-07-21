@@ -1,0 +1,76 @@
+﻿@inject IJSRuntime JS
+
+<div style="position: relative; display: inline-block;">
+    @if (!string.IsNullOrWhiteSpace(ResolvedImageUrl))
+    {
+        <img src="@ResolvedImageUrl"
+             alt="@Alt"
+             class="@CssClass"
+             loading="lazy" />
+    }
+    else
+    {
+        <div class="text-muted">No image</div>
+    }
+
+    @if (IsEditable)
+    {
+        <button @onclick="TriggerFileUpload"
+                title="Edit Image"
+                style="
+                    position: absolute;
+                    bottom: 5px;
+                    right: 5px;
+                    background-color: rgba(0,0,0,0.6);
+                    border: none;
+                    border-radius: 50%;
+                    padding: 4px;
+                    cursor: pointer;
+                    color: white;
+                    width: 24px;
+                    height: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;">
+            <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+        </button>
+
+        <InputFile style="display:none" @ref="hiddenFileInput" accept="image/*" OnChange="HandleFileChange" />
+    }
+</div>
+
+@code {
+    [Parameter] public string? ImageName { get; set; }
+    [Parameter] public MediaServerResource ResourceType { get; set; }
+    [Parameter] public string CssClass { get; set; } = "img-fluid rounded";
+    [Parameter] public bool IsEditable { get; set; } = false;
+    [Parameter] public EventCallback<IBrowserFile> OnEditClicked { get; set; }
+
+    private string? ResolvedImageUrl =>
+        string.IsNullOrWhiteSpace(ImageName)
+            ? null
+            : $"{MediaServerPaths.GetPublicPath(ResourceType)}{ImageName}";
+
+    private string Alt { get; set; } = string.Empty;
+
+    private InputFile hiddenFileInput;
+
+    protected override void OnParametersSet()
+    {
+        Alt = $"{ResourceType} image";
+    }
+
+    private async Task TriggerFileUpload()
+    {
+        await JS.InvokeVoidAsync("triggerClick", hiddenFileInput.Element);
+    }
+
+    private async Task HandleFileChange(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is not null)
+        {
+            await OnEditClicked.InvokeAsync(file);
+        }
+    }
+}

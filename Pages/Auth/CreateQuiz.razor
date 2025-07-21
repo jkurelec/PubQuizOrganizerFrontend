@@ -1,0 +1,190 @@
+﻿@page "/create-quiz"
+@attribute [Authorize]
+
+@inject IQuizService QuizService
+@inject IQuizCategoryService CategoryService
+@inject IOrganizationService OrganizationService
+@inject ILocationService LocationService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject UserInfoService UserInfoService
+
+<MudPaper Class="pa-4 mx-auto" MaxWidth="600px">
+    <MudText Typo="Typo.h5" Class="mb-4">Create Quiz</MudText>
+
+    <MudTextField Label="Quiz Name" @bind-Value="quizName" Required="true" Immediate="true" />
+
+    <h4>Select Categories</h4>
+
+    @if (availableCategories != null)
+    {
+        @foreach (var category in availableCategories)
+        {
+            <label style="display:block; margin-bottom:4px;">
+                <input type="checkbox"
+                       checked="@selectedCategoryIds.Contains(category.Id)"
+                       @onchange="e => OnCategoryChanged(e, category.Id)" />
+                @category.Name
+            </label>
+        }
+    }
+    else
+    {
+        <p>Loading categories...</p>
+    }
+
+    <MudAutocomplete T="LocationDetailedDto"
+    Value="autocompleteValue"
+    ValueChanged="OnAutocompleteValueChanged"
+    SearchFunc="SearchLocations"
+    ToStringFunc="DisplayLocation"
+    Clearable="true"
+    Dense="true"
+    Variant="Variant.Outlined"
+    CoerceText="true"
+    ResetValueOnEmptyText="true"
+    DebounceInterval="300" />
+
+
+    <div class="d-flex flex-wrap my-2">
+        @foreach (var loc in selectedLocations)
+        {
+            <MudChip T="object" Class="ma-1 d-inline-flex align-items-center">
+                <div class="d-flex align-items-center">
+                    @DisplayLocation(loc)
+                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                    Size="Size.Small"
+                    Color="Color.Default"
+                    Class="ml-2"
+                    OnClick="() => RemoveLocation(loc)" />
+                </div>
+            </MudChip>
+
+        }
+    </div>
+
+
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="NavigateToCreateLocation" Class="my-2">
+        Add New Location
+    </MudButton>
+
+    <MudStack Justify="Justify.FlexEnd" Class="mt-6" Spacing="2">
+        <MudButton Color="Color.Primary" OnClick="CreateTheQuiz">Create Quiz</MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private string quizName = string.Empty;
+
+    private HashSet<int> selectedLocationIds = new();
+    private List<LocationDetailedDto> selectedLocations = new();
+
+    private HashSet<int> selectedCategoryIds = new();
+    private List<QCategoryDto> availableCategories = new();
+
+    private LocationDetailedDto? autocompleteValue;
+
+    private UserInfo userInfo = null!;
+    private OrganizationMinimalDto organization = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userInfo = await UserInfoService.GetUserInfo();
+        var org = await OrganizationService.GetOwnerOrganization();
+
+        if (org == null)
+        {
+            NavigationManager.NavigateTo("/create-organization", true);
+            return;
+        }
+
+        organization = org!;
+
+        availableCategories = await CategoryService.GetAll().ContinueWith(x => x.Result.ToList());
+    }
+
+    private bool CanCreate =>
+        !string.IsNullOrWhiteSpace(quizName) &&
+        selectedLocationIds.Count > 0 &&
+        selectedCategoryIds.Count > 0;
+
+    private void NavigateToCreateLocation()
+    {
+        NavigationManager.NavigateTo($"/create-location");
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo("/quizzes");
+    }
+
+    private async Task CreateTheQuiz()
+    {
+        if (!CanCreate)
+        {
+            Snackbar.Add("Enter all the needed information!", Severity.Error);
+
+            return;
+        }
+
+        var newQuiz = new NewQuizDto
+        {
+            Name = quizName,
+            OrganizationId = organization.Id,
+            Locations = selectedLocationIds.ToList(),
+            Categories = selectedCategoryIds.ToList()
+        };
+
+        var createdQuiz = await QuizService.Add(newQuiz);
+
+        if (createdQuiz != null)
+        {
+            NavigationManager.NavigateTo($"/organization/{organization.Id}");
+        }
+    }
+
+    private string DisplayLocation(LocationDetailedDto loc) =>
+        loc == null ? string.Empty : $"{loc.Name} — {loc.Address}, {loc.City}, {loc.Country}";
+
+    private async Task<IEnumerable<LocationDetailedDto>> SearchLocations(string value, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await LocationService.Search(value, 10);
+        }
+        catch
+        {
+            return Array.Empty<LocationDetailedDto>();
+        }
+    }
+
+    private void OnAutocompleteValueChanged(LocationDetailedDto? value)
+    {
+        if (value == null)
+            return;
+
+        if (!selectedLocationIds.Contains((int)value.Id!))
+        {
+            selectedLocations.Add(value);
+            selectedLocationIds.Add((int)value.Id!);
+        }
+
+        autocompleteValue = null;
+    }
+
+    private void RemoveLocation(LocationDetailedDto loc)
+    {
+        selectedLocations.Remove(loc);
+        selectedLocationIds.Remove((int)loc.Id!);
+    }
+
+    private void OnCategoryChanged(ChangeEventArgs e, int categoryId)
+    {
+        bool isChecked = (bool)e.Value!;
+
+        if (isChecked)
+            selectedCategoryIds.Add(categoryId);
+        else
+            selectedCategoryIds.Remove(categoryId);
+    }
+}

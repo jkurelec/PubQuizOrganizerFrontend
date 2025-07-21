@@ -10,6 +10,7 @@ using PubQuizOrganizerFrontend.Services.Implementations;
 using PubQuizOrganizerFrontend.Services.Interfaces;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
@@ -21,10 +22,11 @@ builder.Services.AddScoped<ITokenStorageService, TokenStorageService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<UserInfoService>();
 
-builder.Services.AddScoped<IQuizEditionService, QuizEditionService>();
-builder.Services.AddScoped<IQuizEditionApplicationService, QuizEditionApplicationService>();
-builder.Services.AddScoped<ITeamService, TeamService>();
-
+builder.Services.AddScoped<IOrganizationService, OrganizationService>();
+builder.Services.AddScoped<IQuizService, QuizService>();
+builder.Services.AddScoped<IQuizCategoryService, QuizCategoryService>();
+builder.Services.AddScoped<ILocationService, LocationService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddTransient<RetryingTokenHandler>();
 

@@ -36,7 +36,7 @@ namespace PubQuizOrganizerFrontend.Authentication.Misc
             {
                 var refreshRequest = new HttpRequestMessage(HttpMethod.Post, "auth/refresh");
                 refreshRequest.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
-                refreshRequest.Headers.Add("AppName", "Attendee");
+                refreshRequest.Headers.Add("AppName", "Organizer");
 
                 var refreshResponse = await _httpClient.SendAsync(refreshRequest, cancellationToken);
 

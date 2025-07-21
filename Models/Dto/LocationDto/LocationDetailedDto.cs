@@ -13,5 +13,6 @@
         public string CountryCode { get; set; } = null!;
         public double Lat { get; set; }
         public double Lon { get; set; }
+        public string? ProfileImage { get; set; }
     }
 }

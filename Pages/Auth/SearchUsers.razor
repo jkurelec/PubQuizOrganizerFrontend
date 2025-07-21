@@ -1,0 +1,85 @@
+﻿@page "/search-users"
+
+@inject IUserService UserService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudPaper Class="pa-6 mx-auto mt-6" MaxWidth="800px">
+    <MudText Typo="Typo.h5" Class="mb-4">Search Users</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" sm="3">
+            <MudTextField Label="Username" @bind-Value="username" Immediate="true" />
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudSelect T="string" Label="Sort By" @bind-Value="sortBy" Dense="true">
+                <MudSelectItem Value="@("username")">Username</MudSelectItem>
+                <MudSelectItem Value="@("email")">Email</MudSelectItem>
+                <MudSelectItem Value="@("rating")">Rating</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudCheckBox T="bool" @bind-Value="@descending" Label="Desc" />
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="PerformSearch">Search</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider Class="my-4" />
+
+    @if (results != null && results.Any())
+    {
+        <MudList T="UserBriefDto">
+            @foreach (var user in results)
+            {
+                <MudListItem T="UserBriefDto" Value="user" OnClick="@(() => NavigateToUser(user.Id))">
+                    <div class="d-flex align-items-center">
+                        <MudAvatar Size="Size.Large" Class="mr-3">
+                            <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{user.ProfileImage}")"
+                            Alt="@($"Profile image of {user.Username}")"
+                            Style="width: 100%; height: 100%; object-fit: cover;" />
+                        </MudAvatar>
+                        <div>
+                            <MudText Typo="Typo.subtitle1">@user.Username</MudText>
+                            <MudText Typo="Typo.caption">Rating: @user.Rating</MudText>
+                        </div>
+                    </div>
+                </MudListItem>
+            }
+        </MudList>
+
+
+    }
+    else if (results != null)
+    {
+        <MudText>No users found.</MudText>
+    }
+</MudPaper>
+
+@code {
+    private string? username;
+    private string? sortBy = "username";
+    private bool descending = false;
+    private int limit = 25;
+
+    private IEnumerable<UserBriefDto>? results;
+
+    private async Task PerformSearch()
+    {
+        try
+        {
+            results = await UserService.Search(username, sortBy, descending, limit);
+            Snackbar.Add($"Found {results.Count()} users.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to search users: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void NavigateToUser(int id)
+    {
+        Navigation.NavigateTo($"player/{id}");
+    }
+}
