@@ -33,9 +33,11 @@ else
                 @if (avaliableQuizzes.Count > 0)
                 {
                     <MudItem xs="2" Class="d-flex justify-end align-center">
-                        <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
-                                       Color="Color.Primary"
-                                       OnClick="OpenInviteDialog" />
+                        <MudButton StartIcon="@Icons.Material.Filled.PersonAdd"
+                                   Color="Color.Primary"
+                                   OnClick="OpenInviteDialog">
+                            Invite To Team
+                        </MudButton>
                     </MudItem>
                 }
             </MudGrid>
@@ -146,18 +148,30 @@ else
                     @foreach (var attended in User.AttendedEditions)
                     {
                         <MudListItem Class="d-flex align-items-center justify-content-between">
-                            <div>
-                                <MudText Typo="Typo.subtitle1">@attended.Edition.Name</MudText>
-                                <MudText Typo="Typo.caption">@attended.Edition.Category.Name</MudText>
-                                <MudText Typo="Typo.caption">Rating: @attended.Edition.Rating</MudText>
-                                <MudText Typo="Typo.caption">@attended.Edition.Time.ToString("g")</MudText>
-                            </div>
-                            <div class="text-right">
-                                <MudText Typo="Typo.body2">Team: @attended.Team.Name</MudText>
-                                <MudText Typo="Typo.caption">Rating: @attended.Rating</MudText>
-                                <MudText Typo="Typo.caption">Rank: @attended.Rank?.ToString() ?? "N/A"</MudText>
-                                <MudText Typo="Typo.caption">Points: @attended.TeamPoints / @attended.TotalPoints</MudText>
-                            </div>
+                            <MudStack Row>
+                                <MudAvatar Size="Size.Medium" Class="mr-3">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Edition)}{attended.Edition.ProfileImage}")"
+                                              Alt="@attended.Edition.ProfileImage" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <MudStack Spacing="0" Class="pb-4">
+                                    <MudText Typo="Typo.h6">@attended.Edition.Name</MudText>
+                                    <MudText Typo="Typo.caption">@attended.Edition.Category.Name</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @attended.Edition.Rating</MudText>
+                                    <MudText Typo="Typo.caption">@attended.Edition.Time.ToString("g")</MudText>
+                                </MudStack>
+                            </MudStack>
+                            <MudStack Row>
+                                <MudAvatar Size="Size.Medium" Class="mr-3">
+                                    <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Team)}{attended.Team.ProfileImage}")"
+                                              Alt="@attended.Team.ProfileImage" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                </MudAvatar>
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.body2">Team: @attended.Team.Name</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @attended.Rating</MudText>
+                                    <MudText Typo="Typo.caption">Rank: @(attended.Rank?.ToString() ?? "N/A")</MudText>
+                                    <MudText Typo="Typo.caption">Points: @attended.TeamPoints / @attended.TotalPoints</MudText>
+                                </MudStack>
+                            </MudStack>
                         </MudListItem>
                     }
                 </MudList>

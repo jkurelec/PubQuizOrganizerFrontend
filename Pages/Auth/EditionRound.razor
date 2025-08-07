@@ -1,0 +1,188 @@
+﻿@page "/edition-round/{roundId:int}"
+@attribute [Authorize]
+
+@inject IUpcomingQuizQuestionService UpcomingQuizService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Round Segments</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h4">Edition: @editionName</MudText>
+        <MudText Typo="Typo.h5">Round #@round?.Number</MudText>
+        @if (round == null)
+        {
+            <MudProgressCircular Indeterminate />
+        }
+        else if (!round.QuizSegments.Any())
+        {
+            <MudText>No segments available.</MudText>
+        }
+        else
+        {
+            @foreach (var segment in round.QuizSegments.OrderBy(s => s.Number))
+            {
+                <MudPaper Class="pa-4 mb-4" Elevation="1">
+                    <MudStack Spacing="2">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.subtitle1"><b>Segment @segment.Number</b></MudText>
+                                <MudText Typo="Typo.caption">Type: @segment.Type</MudText>
+                                <MudText Typo="Typo.caption">Bonus Points: @segment.BonusPoints</MudText>
+                            </MudStack>
+
+                            <MudStack Row>
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                Disabled="@IsFirst(segment)"
+                                OnClick="@(() => MoveSegment(segment, -1))"
+                                Color="Color.Primary" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                                Disabled="@IsLast(segment)"
+                                OnClick="@(() => MoveSegment(segment, 1))"
+                                Color="Color.Primary" />
+                            </MudStack>
+                        </MudStack>
+
+                        <MudExpansionPanels Elevation="0">
+                            <MudExpansionPanel Text="Questions">
+                                @if (segment.Questions == null || !segment.Questions.Any())
+                                {
+                                    <MudText Typo="Typo.caption">No questions in this segment.</MudText>
+                                }
+                                else
+                                {
+                                    <MudList T="QuizQuestionDto" Dense="true">
+                                        @foreach (var q in segment.Questions.OrderBy(q => q.Number))
+                                        {
+                                            <MudListItem>
+                                                <MudStack onclick="@(() => Navigation.NavigateTo($"edit-question/{q.Id}"))">
+                                                    <MudText><b>@q.Number</b>: @q.Question</MudText>
+                                                    <MudText Typo="Typo.caption">Points: @q.Points, Bonus: @q.BonusPoints</MudText>
+                                                    <MudText Typo="Typo.caption">Type: @q.Type, Rating: @q.Rating</MudText>
+                                                </MudStack>
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+                                }
+
+                                <MudDivider Class="my-2" />
+
+                                <MudButton StartIcon="@Icons.Material.Filled.Add"
+                                Variant="Variant.Filled"
+                                Color="Color.Primary"
+                                OnClick="@(() => Navigation.NavigateTo($"/create-question/{segment.Id}"))">
+                                    Create Question
+                                </MudButton>
+                            </MudExpansionPanel>
+                        </MudExpansionPanels>
+                    </MudStack>
+                </MudPaper>
+            }
+        }
+        @if (!showAddSegment)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add"
+            Variant="Variant.Filled"
+            Color="Color.Primary"
+            Class="mt-4"
+            OnClick="@(() => showAddSegment = true)">
+                Add Segment
+            </MudButton>
+        }
+        else
+        {
+            <MudStack Class="mt-4" Spacing="2">
+                <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                    <MudNumericField T="decimal"
+                    Label="Bonus Points"
+                    @bind-Value="newSegment.BonusPoints"
+                    Variant="Variant.Outlined"
+                    Immediate="true" />
+
+                    <MudSelect T="SegmentType"
+                    Label="Segment Type"
+                    @bind-Value="newSegment.Type"
+                    Variant="Variant.Outlined">
+                        @foreach (SegmentType type in Enum.GetValues(typeof(SegmentType)))
+                        {
+                            <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudStack>
+
+                <MudStack Row Spacing="2">
+                    <MudButton Variant="Variant.Filled"
+                    Color="Color.Primary"
+                    StartIcon="@Icons.Material.Filled.Add"
+                    OnClick="AddSegment">
+                        Confirm Add
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                    Color="Color.Secondary"
+                    OnClick="@(() => showAddSegment = false)">
+                        Cancel
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
+
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public int roundId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string editionName { get; set; } = string.Empty;
+
+    private QuizRoundDto? round;
+    private QuizSegmentDto newSegment = new() { Type = SegmentType.REGULAR };
+    private bool showAddSegment = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        round = await UpcomingQuizService.GetRound(roundId);
+    }
+
+    private async Task AddSegment()
+    {
+        newSegment.RoundId = roundId;
+
+        var result = await UpcomingQuizService.AddSegment(newSegment);
+
+        if (result != null)
+        {
+            Snackbar.Add("Segment successfully added!", Severity.Success);
+            round = await UpcomingQuizService.GetRound(roundId);
+            newSegment = new() { Type = SegmentType.REGULAR };
+            showAddSegment = false;
+        }
+        else
+            Snackbar.Add("Failed to add segment!", Severity.Error);
+    }
+
+    private bool IsFirst(QuizSegmentDto segment) =>
+        segment.Number == round?.QuizSegments.Min(s => s.Number);
+
+    private bool IsLast(QuizSegmentDto segment) =>
+        segment.Number == round?.QuizSegments.Max(s => s.Number);
+
+    private async Task MoveSegment(QuizSegmentDto segment, int delta)
+    {
+        var newNumber = segment.Number + delta;
+
+        if (newNumber < 1 || newNumber > round?.QuizSegments.Count())
+            return;
+
+        await UpcomingQuizService.UpdateSegmentOrder(new UpdateOrderDto
+            {
+                Id = segment.Id,
+                Number = newNumber
+            });
+
+        round = await UpcomingQuizService.GetRound(roundId);
+    }
+}

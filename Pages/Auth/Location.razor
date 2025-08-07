@@ -1,0 +1,126 @@
+﻿@page "/location/{LocationId:int}"
+@attribute [Authorize]
+
+@inject ILocationService LocationService
+@inject IQuizEditionService QuizEditionService
+@inject NavigationManager NavManager
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <MudAlert Severity="Severity.Error">@error</MudAlert>
+}
+else if (location == null)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var fullAddress = $"{location.Address}, {location.City}, {location.Country}";
+    var mapUrl = GetMapUrl();
+
+    <MudPaper Class="pa-4 mt-4">
+        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="2" Class="w-100">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                @if (!string.IsNullOrEmpty(location.ProfileImage))
+                {
+                    <MudAvatar Size="Size.Large">
+                        <PublicImage ImageName="@location.ProfileImage"
+                                     ResourceType="MediaServerResource.Location"
+                                     CssClass="img-fluid rounded" />
+                    </MudAvatar>
+                }
+                <div>
+                    <MudText Typo="Typo.h5">@location.Name</MudText>
+                    <MudText Typo="Typo.body1">@location.Address</MudText>
+                    <MudText Typo="Typo.body2">@location.City, @location.PostalCode</MudText>
+                    <MudText Typo="Typo.body2">@location.Country</MudText>
+                </div>
+            </MudStack>
+
+            <div class="text-end">
+                <MudText Typo="Typo.h6" Color="Color.Secondary">
+                    Editions hosted: @quizEditions.Count
+                </MudText>
+            </div>
+        </MudStack>
+
+        <MudDivider Class="my-4" />
+
+        <MudCard Style="height: 400px;">
+            <iframe height="350"
+            style="border:0"
+            loading="lazy"
+            allowfullscreen
+            src="@mapUrl">
+            </iframe>
+        </MudCard>
+    </MudPaper>
+    @if (quizEditions.Count == 0)
+    {
+        <MudText Typo="Typo.body1">No quiz editions have been held at this location yet.</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.h6" Class="mt-6 mb-2">Quiz Editions at This Location</MudText>
+
+        <MudStack Class="xs-12 p-4">
+            @foreach (var edition in quizEditions.OrderByDescending(e => e.Time))
+            {
+                <div class="edition-card mb-3" @onclick="@(() => NavManager.NavigateTo($"/edition/{edition.Id}"))">
+
+                    <MudPaper Class="xs-12 d-flex align-items-center p-3 w-100 hoverable" Style="cursor: pointer" Elevation="1">
+
+                        @if (!string.IsNullOrEmpty(edition.ProfileImage))
+                        {
+                            <div class="image-wrapper me-4">
+                                <PublicImage ImageName="@edition.ProfileImage"
+                                             ResourceType="MediaServerResource.Edition"
+                                             CssClass="rounded"
+                                             RemSize="6" />
+                            </div>
+                        }
+
+                        <div class="flex-grow-1 me-4">
+                            <MudText Typo="Typo.h6">@edition.Name</MudText>
+                            <MudText Typo="Typo.subtitle2">@edition.Quiz.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary"> @edition.Category.Name </MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary"> @edition.Time.ToLocalTime().ToString("dd MMM yyyy, HH:mm") </MudText>
+                        </div>
+
+                        <div class="text-end" style="min-width: 6rem;">
+                            <MudText Typo="Typo.body2">Teams: @edition.AcceptedTeams / @edition.MaxTeams</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">+@edition.PendingTeams pending</MudText>
+                        </div>
+                    </MudPaper>
+                </div>
+            }
+        </MudStack>
+    }
+}
+
+@code {
+    [Parameter]
+    public int LocationId { get; set; }
+
+    private LocationDetailedDto? location;
+    private string? error;
+    private List<QuizEditionBriefDto> quizEditions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        location = await LocationService.GetById(LocationId);
+
+        if (location == null)
+        {
+            error = "Location not found.";
+        }
+
+        quizEditions = await QuizEditionService.GetByLocationId(LocationId).ContinueWith(x => x.Result.ToList());
+    }
+
+    private string GetMapUrl()
+    {
+        var address = $"{location?.Address}, {location?.City}, {location?.Country}";
+        return $"https://maps.google.com/maps?q={location!.Lat},{location.Lon}&z=15&output=embed";
+    }
+}

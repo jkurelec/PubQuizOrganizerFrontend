@@ -1,0 +1,352 @@
+﻿@inject IQuizAnswerService QuizAnswerService
+@inject IUpcomingQuizQuestionService QuizQuestionService
+@inject IEloCalculatorService EloCalculatorService
+
+
+<MudPaper Class="pa-4">
+    @if (rounds == null || results == null)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (!rounds.Any())
+    {
+        <MudOverlay Visible="true" Class="d-flex justify-center align-center" DarkBackground="true">
+            <MudPaper Class="pa-6">
+                <MudText Typo="Typo.h6" Align="Align.Center">
+                    Must Add Rounds To Enter Results!!!
+                </MudText>
+            </MudPaper>
+        </MudOverlay>
+    }
+    else
+    {
+        <MudText Typo="Typo.h5">Rated: @editionRated</MudText>
+        <MudTable Items="results" Dense="true" Hover="true" Elevation="0" Bordered="true" Class="mt-4" T="QuizEditionResultBriefDto">
+            <HeaderContent>
+                <MudTh>Rank</MudTh>
+                <MudTh>Team</MudTh>
+                @foreach (var round in rounds)
+                {
+                    <MudTh>R @round.Number</MudTh>
+                }
+                <MudTh>Total</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    @if (context.Rank == 1)
+                    {
+                        <MudIcon Color="Color.Warning" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else if (context.Rank == 2)
+                    {
+                        <MudIcon Color="Color.Secondary" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else if (context.Rank == 3)
+                    {
+                        <MudIcon Color="Color.Info" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else
+                    {
+                        @context.Rank
+                    }
+                </MudTd>
+                <MudTd>
+                    <div class="d-flex align-items-center">
+                        <PublicImage ImageName="@context.Team.ProfileImage" ResourceType="MediaServerResource.Team" CssClass="me-2" RemSize="2" />
+                        @context.Team.Name
+                        @if (ShouldShowBreakTieButton(context))
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Upgrade"
+                            Color="Color.Success"
+                            Size="Size.Small"
+                            Class="ms-2"
+                            OnClick="@(() => BreakTieAsync(context.Id))" />
+                        }
+                    </div>
+                </MudTd>
+                @foreach (var round in rounds)
+                {
+                    var roundResult = context.Rounds.FirstOrDefault(r => r.RoundId == round.Id);
+                    var isEditable = round.Number == currentEditableRoundNumber || round.Number == previousEditableRoundNumber;
+                    bool isMissing = roundResult == null;
+
+                    <MudTd Class="@(isMissing ? "bg-light-red" : null)">
+                        @if (isEditable)
+                        {
+                            if (!roundPoints.ContainsKey(context.Id))
+                                roundPoints[context.Id] = new Dictionary<int, decimal>();
+
+                            if (!roundPoints[context.Id].ContainsKey(round.Id))
+                                roundPoints[context.Id][round.Id] = roundResult?.Points ?? 0;
+
+                            <MudNumericField T="decimal"
+                            Immediate="true"
+                            Min="0"
+                            Max="@round.Points"
+                            Value="@(roundPoints[context.Id].TryGetValue(round.Id, out var val) ? val : 0)"
+                            ValueChanged="@(v => OnPointChanged(context.Id, round.Id, v))" />
+                        }
+                        else
+                        {
+                            @((roundResult?.Points)?.ToString("0.##", CultureInfo.InvariantCulture) ?? "-")
+                        }
+                    </MudTd>
+                }
+                <MudTd>@context.TotalPoints.ToString("0.##", CultureInfo.InvariantCulture)</MudTd>
+            </RowTemplate>
+            <FooterContent>
+                <MudTd ColSpan="2"><b>Average</b></MudTd>
+                @foreach (var round in rounds)
+                {
+                    var total = results.Sum(r => r.Rounds.FirstOrDefault(x => x.RoundId == round.Id)?.Points ?? 0);
+                    var avg = total / results.Count;
+                    <MudTd>@($"{avg:0.##}/{round.Points:0.##}")</MudTd>
+                }
+                <MudTd>
+                    @{
+                        var total = results.Sum(r => r.TotalPoints);
+                        var maxTotal = rounds.Sum(r => r.Points);
+                        var avg = total / results.Count;
+                    }
+                    @($"{avg:0.##}/{maxTotal:0.##}")
+                </MudTd>
+            </FooterContent>
+        </MudTable>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveAllRoundResultsAsync" Disabled="@(!modifiedCells.Any() || editionRated)">
+            Save All Round Results
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Class="mt-4 ms-2" OnClick="RankTeams" Disabled="@(editionRated)">
+            Rank Teams (Round @currentEditableRoundNumber)
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" Class="mt-4 ms-2" OnClick="CalculateRatings" Disabled="@(!canCalculateRank)">
+            Calculate Ratings
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Tertiary" Class="mt-4 ms-2" Href=@($"/team-ranking/{editionId}")>
+            Show Team Rankings
+        </MudButton>
+    }
+</MudPaper>
+
+@code {
+    [Parameter]
+    public int editionId { get; set; }
+
+    private List<QuizEditionResultBriefDto>? results;
+    private List<QuizRoundBriefDto>? rounds;
+    private Dictionary<int, Dictionary<int, decimal>> originalRoundPoints = new();
+    private HashSet<(int teamId, int roundId)> modifiedCells = new();
+    private bool editionRated = false;
+    private bool canCalculateRank = false;
+
+
+    private int currentEditableRoundNumber = 1;
+    private int previousEditableRoundNumber = 0;
+
+    private Dictionary<int, Dictionary<int, decimal>> roundPoints = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        rounds = (await QuizQuestionService.GetRoundsBrief(editionId))?.OrderBy(r => r.Number).ToList();
+        results = (await QuizAnswerService.GetEditionResults(editionId))?.OrderBy(r => r.Rank).ToList();
+
+        InitializeRoundState();
+
+        originalRoundPoints = results?.ToDictionary(
+            r => r.Id,
+            r => rounds?.ToDictionary(
+                round => round.Id,
+                round => r.Rounds?.FirstOrDefault(rr => rr.RoundId == round.Id)?.Points ?? 0
+            ) ?? new Dictionary<int, decimal>()
+        ) ?? new Dictionary<int, Dictionary<int, decimal>>();
+
+        editionRated = await EloCalculatorService.IsEditionRated(editionId);
+        canCalculateRank = !editionRated && AllResultsEnteredForAllRounds();
+    }
+
+    private bool IsAnyRoundPointChanged()
+    {
+        if (results == null || rounds == null)
+            return false;
+
+        foreach (var team in results)
+        {
+            foreach (var round in rounds)
+            {
+                if (round.Number == currentEditableRoundNumber || round.Number == previousEditableRoundNumber)
+                {
+                    var original = originalRoundPoints.GetValueOrDefault(team.Id)?.GetValueOrDefault(round.Id, 0);
+                    var current = roundPoints.GetValueOrDefault(team.Id)?.GetValueOrDefault(round.Id, 0);
+                    if (original != current)
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void OnPointChanged(int teamId, int roundId, decimal? value)
+    {
+        if (!roundPoints.ContainsKey(teamId))
+            roundPoints[teamId] = new Dictionary<int, decimal>();
+
+        roundPoints[teamId][roundId] = value ?? 0;
+
+        modifiedCells.Add((teamId, roundId));
+    }
+
+    private async Task SaveAllRoundResultsAsync()
+    {
+        foreach (var (teamId, roundId) in modifiedCells)
+        {
+            var points = roundPoints[teamId][roundId];
+            var result = results!.First(r => r.Id == teamId);
+            var existing = result.Rounds?.FirstOrDefault(r => r.RoundId == roundId);
+
+            var dto = new NewQuizRoundResultDto
+                {
+                    EditionResultId = teamId,
+                    RoundId = roundId,
+                    Points = points
+                };
+
+            if (existing == null)
+                await QuizAnswerService.AddTeamRoundPoints(dto);
+            else
+            {
+                if (await QuizAnswerService.IsDetailedResult(existing.Id))
+                    await QuizAnswerService.DeleteRoundResultSegments(existing.Id);
+
+                await QuizAnswerService.UpdateTeamRoundPoints(dto);
+            }
+        }
+
+        modifiedCells.Clear();
+        results = (await QuizAnswerService.GetEditionResults(editionId))?.OrderBy(r => r.Rank).ToList();
+        if (!editionRated)
+            canCalculateRank = AllResultsEnteredForAllRounds();
+
+        InitializeRoundState();
+    }
+
+    private void InitializeRoundState()
+    {
+        if (results == null || rounds == null)
+            return;
+
+        foreach (var result in results)
+        {
+            roundPoints[result.Id] = new();
+            foreach (var round in rounds)
+            {
+                var roundResult = result.Rounds.FirstOrDefault(r => r.RoundId == round.Id);
+                if (roundResult != null)
+                    roundPoints[result.Id][round.Id] = roundResult.Points;
+            }
+        }
+
+        foreach (var round in rounds)
+        {
+            if (results.Any(r => !r.Rounds.Any(x => x.RoundId == round.Id)))
+            {
+                currentEditableRoundNumber = round.Number;
+                break;
+            }
+            previousEditableRoundNumber = round.Number;
+        }
+    }
+
+    private bool AllResultsEnteredForCurrentRound()
+    {
+        var round = rounds?.FirstOrDefault(x => x.Number == currentEditableRoundNumber);
+        if (round == null || results == null)
+            return false;
+
+        return results.All(r => r.Rounds.Any(rr => rr.RoundId == round.Id));
+    }
+
+    private async Task RankTeams()
+    {
+        var newResults = await QuizAnswerService.RankTeamsOnEdition(editionId);
+        if (newResults != null)
+        {
+            results = newResults.OrderBy(r => r.Rank).ToList();
+            InitializeRoundState();
+        }
+    }
+
+    private int GetLastRoundId() =>
+        rounds?.OrderByDescending(r => r.Number).FirstOrDefault()?.Id ?? -1;
+
+    private bool AllPointsEnteredForLastRound()
+    {
+        var lastRoundId = GetLastRoundId();
+
+        return results != null && results.All(r => r.Rounds.Any(rr => rr.RoundId == lastRoundId));
+    }
+
+    private bool ShouldShowBreakTieButton(QuizEditionResultBriefDto team)
+    {
+        if (!AllPointsEnteredForLastRound())
+            return false;
+
+        if (results == null)
+            return false;
+
+        var tiedTopRanks = results
+            .Where(r => r.Rank <= 3)
+            .GroupBy(r => r.Rank)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        int total = results.Count;
+        var tiedNearBottom = results
+            .Where(r => r.Rank >= total - 1)
+            .GroupBy(r => r.Rank)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        return tiedTopRanks.Contains(team.Id) || tiedNearBottom.Contains(team.Id);
+    }
+
+    private async Task BreakTieAsync(int promotedId)
+    {
+        results = (await QuizAnswerService.BreakTie(promotedId, editionId))?.OrderBy(r => r.Rank).ToList();
+        InitializeRoundState();
+    }
+
+    private bool AllResultsEnteredForAllRounds()
+    {
+        if (rounds == null || results == null)
+            return false;
+
+        var requiredRoundIds = rounds.Select(r => r.Id).ToHashSet();
+
+        return results.All(result =>
+            result.Rounds != null &&
+            requiredRoundIds.All(roundId =>
+                result.Rounds.Any(rr => rr.RoundId == roundId)
+            )
+        );
+    }
+
+    private async Task CalculateRatings()
+    {
+        var success = await EloCalculatorService.CalculateEditionElo(editionId);
+
+        if (success)
+            editionRated = true;
+
+        canCalculateRank = false;
+        await Task.Delay(10);
+        StateHasChanged();
+    }
+}
+

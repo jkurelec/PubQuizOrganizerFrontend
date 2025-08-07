@@ -1,0 +1,32 @@
+﻿@using PubQuizOrganizerFrontend.Enums
+@using System.Text
+
+@if (MediaBytes is not null && MediaType is not null)
+{
+    @switch (MediaType)
+    {
+        case QuestionType.IMAGE:
+            <img src="@GetDataUrl("image/png", MediaBytes)" alt="Image" style="max-width: 100%; height: auto;" />
+            break;
+        case QuestionType.AUDIO:
+            <audio controls>
+                <source src="@GetDataUrl("audio/mpeg", MediaBytes)" type="audio/mpeg" />
+                Your browser does not support the audio element.
+            </audio>
+            break;
+        case QuestionType.VIDEO:
+            <video controls>
+                <source src="@GetDataUrl("video/mp4", MediaBytes)" type="video/mp4" />
+                Your browser does not support the video tag.
+            </video>
+            break;
+    }
+}
+
+@code {
+    [Parameter] public byte[]? MediaBytes { get; set; }
+    [Parameter] public QuestionType? MediaType { get; set; }
+
+    private string GetDataUrl(string mimeType, byte[] data)
+        => $"data:{mimeType};base64,{Convert.ToBase64String(data)}";
+}

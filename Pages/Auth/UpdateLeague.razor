@@ -1,0 +1,157 @@
+﻿@page "/update-league/{LeagueId:int}"
+@inject IQuizLeagueService QuizLeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<h3>Update League</h3>
+
+<MudPaper Class="pa-4">
+
+    <MudTextField @bind-Value="LeagueName" Label="League Name" Required="true" Class="mb-4" />
+
+    <h6>Points per Position</h6>
+    @foreach (var entry in PointEntries)
+    {
+        <MudGrid Class="mb-2">
+            <MudItem xs="5">
+                <MudNumericField @bind-Value="entry.Position" Label="Position" Min="1" />
+            </MudItem>
+            <MudItem xs="5">
+                <MudNumericField @bind-Value="entry.Points" Label="Points" Min="0" />
+            </MudItem>
+            <MudItem xs="2" Class="d-flex align-center">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemovePointEntry(entry))" />
+            </MudItem>
+        </MudGrid>
+    }
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddPointEntry" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Add" />
+        Add
+    </MudButton>
+
+    <MudDivider Class="mb-2" />
+
+    <MudButton OnClick="ApplyF1Scoring"
+               Variant="Variant.Text"
+               Size="Size.Small"
+               Color="Color.Default"
+               Style="opacity: 0.6; text-transform: none; padding: 2px 6px;">
+        Use F1 Scoring
+    </MudButton>
+
+    <h6>Prizes (Optional)</h6>
+    @foreach (var prize in Prizes)
+    {
+        <MudGrid Class="mb-2">
+            <MudItem xs="7">
+                <MudTextField @bind-Value="prize.Name" Label="Prize Name" />
+            </MudItem>
+            <MudItem xs="3">
+                <MudNumericField @bind-Value="prize.Position" Label="Position (optional)" />
+            </MudItem>
+            <MudItem xs="2" Class="d-flex align-center">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemovePrize(prize))" />
+            </MudItem>
+        </MudGrid>
+    }
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddPrize" Class="mb-4">
+        <MudIcon Icon="@Icons.Material.Filled.Add" />
+        Add
+    </MudButton>
+
+    <MudDivider Class="my-4" />
+
+    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="UpdateQuizLeague">
+        Update League
+    </MudButton>
+
+</MudPaper>
+
+@code {
+    [Parameter] public int LeagueId { get; set; }
+
+    private string LeagueName = string.Empty;
+    private List<PointEntry> PointEntries = new();
+    private List<PrizeDto> Prizes = new();
+    private int QuizId;
+
+    public class PointEntry
+    {
+        public int Position { get; set; }
+        public int Points { get; set; }
+    }
+
+    private void AddPointEntry() => PointEntries.Add(new PointEntry());
+    private void RemovePointEntry(PointEntry entry) => PointEntries.Remove(entry);
+
+    private void AddPrize() => Prizes.Add(new PrizeDto());
+    private void RemovePrize(PrizeDto prize) => Prizes.Remove(prize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var league = await QuizLeagueService.GetDetailedById(LeagueId);
+        if (league is null)
+        {
+            Snackbar.Add("League not found.", Severity.Error);
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        QuizId = league.Quiz.Id;
+        LeagueName = league.Name ?? "";
+        PointEntries = league.Points?.Select(p => new PointEntry { Position = p.Position, Points = p.Points }).ToList() ?? new();
+        Prizes = league.Prizes?.ToList() ?? new();
+    }
+
+    private async Task UpdateQuizLeague()
+    {
+        if (LeagueName == string.Empty)
+        {
+            Snackbar.Add("Must enter league name!", Severity.Warning);
+            return;
+        }
+        if (PointEntries.Count == 0)
+        {
+            Snackbar.Add("Must enter points!", Severity.Warning);
+            return;
+        }
+
+        var dto = new NewQuizLeagueDto
+            {
+                Id = LeagueId,
+                Name = LeagueName,
+                QuizId = QuizId,
+                Points = string.Join("|", PointEntries.Select(e => $"{e.Position}={e.Points}")),
+                Prizes = Prizes
+            };
+
+        var success = await QuizLeagueService.Update(dto);
+
+        if (success != null)
+        {
+            Snackbar.Add("League updated successfully", Severity.Success);
+            Navigation.NavigateTo($"/league/{LeagueId}?updated=1");
+        }
+        else
+        {
+            Snackbar.Add("Failed to update league.", Severity.Error);
+        }
+    }
+
+    private void ApplyF1Scoring()
+    {
+        PointEntries = new List<PointEntry>
+        {
+            new() { Position = 1, Points = 25 },
+            new() { Position = 2, Points = 18 },
+            new() { Position = 3, Points = 15 },
+            new() { Position = 4, Points = 12 },
+            new() { Position = 5, Points = 10 },
+            new() { Position = 6, Points = 8 },
+            new() { Position = 7, Points = 6 },
+            new() { Position = 8, Points = 4 },
+            new() { Position = 9, Points = 2 },
+            new() { Position = 10, Points = 1 }
+        };
+    }
+}

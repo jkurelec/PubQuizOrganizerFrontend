@@ -3,7 +3,6 @@ using PubQuizOrganizerFrontend.Models.Dto.ApplicationDto;
 using PubQuizOrganizerFrontend.Models.Dto.OrganizationDto;
 using PubQuizOrganizerFrontend.Models.Dto.QuizDto;
 using PubQuizOrganizerFrontend.Services.Interfaces;
-using System.IO.Enumeration;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
@@ -30,8 +29,8 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
             => await _http.GetFromJsonAsync<IEnumerable<HostQuizzesDto>>($"{BasePath}/hosts/{organizerId}")
                ?? Enumerable.Empty<HostQuizzesDto>();
 
-        public async Task<HostDto?> GetHost(int organizerId, int hostId, int quizId)
-            => await _http.GetFromJsonAsync<HostDto>($"{BasePath}/{organizerId}/host/{hostId}/quiz/{quizId}");
+        public async Task<HostDto?> GetHost(int hostId, int quizId)
+            => await _http.GetFromJsonAsync<HostDto>($"{BasePath}/host/{hostId}/quiz/{quizId}");
 
         public async Task<OrganizationBriefDto?> Add(NewOrganizationDto newOrganizer)
         {

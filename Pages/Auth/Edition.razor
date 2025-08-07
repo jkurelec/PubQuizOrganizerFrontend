@@ -1,0 +1,389 @@
+﻿@page "/edition/{id:int}"
+@attribute [Authorize]
+
+@inject IQuizEditionService QuizEditionService
+@inject IQuizEditionApplicationService QuizEditionApplicationService
+@inject IOrganizationService OrganizationService
+@inject ISnackbar Snackbar
+@inject UserInfoService UserInfoService
+@inject NavigationManager Navigation
+
+@if (edition == null)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="pa-4">
+        <MudStack Spacing="3" Class="p-4">
+            @if (userHost?.HostPermissions.CrudQuestion == true)
+            {
+                <MudButton Variant="Variant.Filled"
+                Color="Color.Success"
+                FullWidth
+                Class="mt-4"
+                OnClick="@(() => Navigation.NavigateTo($"/edition-rounds/{Id}?editionName={Uri.EscapeDataString(edition.Name)}"))">
+                    Add/Edit Questions!
+                </MudButton>
+            }
+            @if (canEnterResults && DetailedQuestions != null)
+            {
+                <MudButton Variant="Variant.Filled"
+                Color="Color.Success"
+                FullWidth
+                Class="mt-4"
+                OnClick="@(() => Navigation.NavigateTo($"/edition-results/{edition.Id}?detailed={DetailedQuestions}"))">
+                    Enter points!
+                </MudButton>
+            }
+            <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Spacing="4">
+                <MudStack Style="flex-shrink: 0;" Spacing="2">
+                    <MudStack Row Justify="Justify.FlexStart" AlignItems="AlignItems.Center" Spacing="4">
+                        @if (!string.IsNullOrEmpty(edition.ProfileImage))
+                        {
+                            <PublicImage ImageName="@edition.ProfileImage"
+                            ResourceType="MediaServerResource.Edition"
+                            RemSize="6"
+                            IsEditable="userHost?.HostPermissions.EditEdition ?? false"
+                            OnEditClicked="HandleQuizImageUpload"
+                            CssClass="rounded mx-auto" />
+                        }
+
+                        <MudText Typo="Typo.h3"><strong>@edition.Name</strong></MudText>
+                    </MudStack>
+
+                    <MudDivider Class="pb-4"/>
+
+                    <MudStack Spacing="1">
+                        <MudText><strong>Rating:</strong> @edition.Rating</MudText>
+                        @if (edition.League != null)
+                        {
+                            <MudText>
+                                <strong>League: </strong><MudLink Href="@($"/league/{edition.League.Id}")"> @edition.League.Name</MudLink>
+                            </MudText>
+                        }
+                        <MudText>
+                            <strong>Quiz:</strong><MudLink Href="@($"/quiz/{edition.Quiz.Id}")"> @edition.Quiz.Name</MudLink>
+                        </MudText>
+                        <MudText><strong>Category: </strong> @edition.Category.Name</MudText>
+                        <MudText><strong>Time: </strong> @edition.Time.ToString("f")</MudText>
+                        <MudText>
+                            <strong>Location: </strong><MudLink Href="@($"/location/{edition.Location.Id}")"> @edition.Location.Name, @edition.Location.City</MudLink>
+                        </MudText>
+                        <MudText>
+                            <strong>Host: </strong><MudLink Href="@($"/player/{edition.Host.Id}")"> @edition.Host.Username</MudLink>
+                        </MudText>
+                    </MudStack>
+                </MudStack>
+
+                <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle1"><b>Accepted Teams:</b></MudText>
+                    <MudProgressCircular
+                    Color="Color.Primary"
+                    Size="Size.Large"
+                    Value="@GetAcceptedPercentage()"
+                    Style="margin-bottom: 1rem;">
+                        <div>@edition.AcceptedTeams / @edition.MaxTeams</div>
+                    </MudProgressCircular>
+
+                    <MudExpansionPanels Elevation="0" Dense="true">
+                        <MudExpansionPanel Text="View Accepted Teams">
+                            @if (acceptedApplications.Any())
+                            {
+                                <MudList T="AcceptedQuizEditionApplicationDto" Dense="true">
+                                    @foreach (var team in acceptedApplications.Select((x, index) => new { x, index }))
+                                    {
+                                        var i = team.index + 1;
+                                        <MudListItem>
+                                            <MudAvatar Size="Size.Medium" Class="me-2">
+                                                <PublicImage ImageName="@team.x.TeamName" ResourceType="MediaServerResource.Team" RemSize="2" />
+                                            </MudAvatar>
+                                            <MudText Class="me-auto">@($"{i}. {team.x.TeamName}")</MudText>
+                                            <MudText>@($"{team.x.TeamMembers} / {edition.MaxTeamSize}")</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                            else
+                            {
+                                <MudText>No accepted teams.</MudText>
+                            }
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+
+                    <!-- Pending Teams -->
+                    <MudText Typo="Typo.subtitle1" Class="mt-4"><b>Pending Teams:</b> @edition.PendingTeams</MudText>
+
+                    <MudExpansionPanels Elevation="0" Dense="true">
+                        @if (unansweredApplications.Any())
+                        {
+                            @foreach (var application in unansweredApplications)
+                            {
+                                <MudExpansionPanel Text="@application.TeamName">
+                                    <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudAvatar Size="Size.Medium">
+                                                <PublicImage ImageName="@application.TeamId.ToString()" ResourceType="MediaServerResource.Team" RemSize="3" />
+                                            </MudAvatar>
+                                            <MudText>@application.TeamName</MudText>
+                                        </MudStack>
+                                        <MudText>@($"{application.TeamMembers.Count()} / {edition.MaxTeamSize}")</MudText>
+                                    </MudStack>
+
+                                    <MudText><b>Favorite Category:</b> @application.TeamCategory.Name</MudText>
+                                    <MudText><b>Favorite Quiz:</b> @application.TeamQuiz.Name</MudText>
+
+                                    <MudList T="UserBriefDto" Dense="true" Class="mt-2">
+                                        @foreach (var member in application.TeamMembers.Select((x, index) => new { x, index }))
+                                        {
+                                            var i = member.index + 1;
+                                            <MudListItem Dense="true">
+                                                <MudStack Row Justify="Justify.FlexStart" >
+                                                    <MudText Class="me-2">#@i</MudText>
+                                                    <MudAvatar Size="Size.Small" Class="me-2">
+                                                        <PublicImage ImageName="@member.x.ProfileImage" ResourceType="MediaServerResource.User" RemSize="2" />
+                                                    </MudAvatar>
+                                                    <MudText Class="me-auto">@member.x.Username</MudText>
+                                                    <MudText Style="text-align: end">@member.x.Rating</MudText>
+                                                </MudStack>
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+                                    @if (userHost?.HostPermissions.ManageApplication == true)
+                                    {
+                                        <MudStack Row Class="mt-3 w-100" Spacing="1">
+                                            <MudButton StartIcon="@Icons.Material.Filled.Check"
+                                            Variant="Variant.Filled"
+                                            Color="Color.Success"
+                                            OnClick="() => RespondToApplication(application.Id, true)" >
+                                                Accept Team
+                                            </MudButton>
+                                            <MudButton StartIcon="@Icons.Material.Filled.Close"
+                                            Variant="Variant.Filled"
+                                            Color="Color.Error"
+                                            OnClick="() => RespondToApplication(application.Id, false)" >
+                                                Reject Team
+                                            </MudButton>
+                                        </MudStack>
+                                    }
+                                </MudExpansionPanel>
+                            }
+                        }
+                        else
+                        {
+                            <MudText>No pending applications.</MudText>
+                        }
+                    </MudExpansionPanels>
+                </MudStack>
+            </MudStack>            
+            <MudDivider Class="pb-4" />
+
+            <!-- Details Segment -->
+            <MudDivider Class="pb-4"  />
+            <MudStack Spacing="2">
+                @if (edition.Fee != null && edition.FeeType is > 0 and <= 3)
+                {
+                    <MudText>
+                        <b>Fee:</b> @edition.Fee € (@(edition.FeeType switch
+                        {
+                            1 => "Per Team",
+                            2 => "Per Member",
+                            3 => "Free",
+                            _ => "Unknown"
+                        }))
+                    </MudText>
+                }
+                @if (edition.MaxTeamSize != null)
+                {
+                    <MudText><b>Max Team Size:</b> @edition.MaxTeamSize</MudText>
+                }
+                @if (edition.Duration != null)
+                {
+                    <MudText><b>Duration:</b> @edition.Duration min</MudText>
+                }
+                <MudText><b>Registration:</b> @edition.RegistrationStart.ToLocalTime().ToString("f") → @edition.RegistrationEnd.ToLocalTime().ToString("f")</MudText>
+
+                @if (edition.Prizes.Any())
+                {
+                    <MudText><b>Prizes</b></MudText>
+                    <MudList T="PrizeDto" Dense="true" Class="p-0">
+                        @foreach (var prize in edition.Prizes.OrderBy(p => p.Position ?? int.MaxValue))
+                        {
+                            <MudListItem Class="px-2 py-1" Style="pointer-events: none;">
+                                <MudText Typo="Typo.body2">
+                                    @(prize.Position.HasValue ? $"#{prize.Position}: " : "")@prize.Name
+                                </MudText>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudStack>
+
+            <!-- Description -->
+            @if (!string.IsNullOrWhiteSpace(edition.Description))
+            {
+                <MudDivider Class="my-2" />
+                <MudText Typo="Typo.h6">Description</MudText>
+                <MudText>@edition.Description</MudText>
+            }
+
+            <!-- Map -->
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.h6"><strong>@edition.Location.Name, @edition.Location.City</strong></MudText>
+            <iframe class="w-100" style="border:0; border-radius: 0.5rem; height: 30rem"
+            loading="lazy" allowfullscreen
+            src="https://maps.google.com/maps?q=@Uri.EscapeDataString(edition.Location.Address + ", " + edition.Location.City + ", " + edition.Location.Country)&t=&z=15&ie=UTF8&iwloc=&output=embed">
+            </iframe>
+
+            @if (userHost?.HostPermissions.EditEdition == true)
+            {
+                <MudButton Variant="Variant.Filled"
+                Color="Color.Primary"
+                FullWidth
+                Class="mt-4"
+                OnClick="@(() => Navigation.NavigateTo($"/update-edition/{Id}"))">
+                    Update Edition
+                </MudButton>
+            }
+            @if (userHost?.HostPermissions.DeleteEdition == true && edition.Time > DateTime.UtcNow)
+            {
+                <MudItem>
+                    <div class="ms-auto position-relative d-inline-block">
+                        <MudButton Variant="Variant.Filled"
+                        Color="Color.Error"
+                        FullWidth
+                        Class="mt-4"
+                        @ref="deleteButtonRef"
+                        OnClick="() => showDeletePopover = !showDeletePopover">
+                            Delete Edition
+                        </MudButton>
+
+                        <MudPopover Open="@showDeletePopover" Class="pa-3">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Confirm deletion?</MudText>
+                            <div class="d-flex justify-content-end">
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="ConfirmDelete">Delete</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Class="me-2" OnClick="() => showDeletePopover = false">Cancel</MudButton>
+                            </div>
+                        </MudPopover>
+                    </div>
+                </MudItem>
+            }   
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private QuizEditionDetailedDto? edition;
+    private IEnumerable<AcceptedQuizEditionApplicationDto> acceptedApplications = new List<AcceptedQuizEditionApplicationDto>();
+    private IEnumerable<QuizEditionApplicationDto> unansweredApplications = new List<QuizEditionApplicationDto>();
+    private UserInfo user = null!;
+    private HostDto? userHost;
+    private bool showDeletePopover = false;
+    private MudButton? deleteButtonRef;
+    private bool canEnterResults = false;
+    private bool? DetailedQuestions = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        edition = await QuizEditionService.GetById(Id);
+        acceptedApplications = await QuizEditionApplicationService.GetAcceptedApplicationsByEdition(Id);
+        unansweredApplications = await QuizEditionApplicationService.GetApplications(Id);
+
+        user = await UserInfoService.GetUserInfo();
+        userHost = await OrganizationService.GetHost(user.Id, edition!.Quiz.Id);
+
+        if (userHost != null)
+            canEnterResults = HasAnyPermission(userHost.HostPermissions) && (edition.Time < DateTime.UtcNow);
+
+        DetailedQuestions = await QuizEditionService.HasDetailedQuestions(Id);
+    }
+
+    private double GetAcceptedPercentage()
+    {
+        if (edition == null || edition.MaxTeams == 0)
+            return 0;
+
+        return ((double)edition.AcceptedTeams / edition.MaxTeams) * 100;
+    }
+
+    private async Task HandleQuizImageUpload(IBrowserFile file)
+    {
+        try
+        {
+            var imageName = await QuizEditionService.UpdateProfileImage(file, edition!.Id);
+            edition!.ProfileImage = $"{imageName}?v={Random.Shared.Next()}";
+            Snackbar.Add("Image uploaded successfully.", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Image upload failed.", Severity.Error);
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        showDeletePopover = false;
+
+        var success = await QuizEditionService.Delete(Id);
+
+        if (success)
+        {
+            Snackbar.Add("Edition deleted successfully.", Severity.Success);
+            Navigation.NavigateTo($"/quiz/{edition!.Quiz.Id}");
+        }
+        else
+        {
+            Snackbar.Add("Failed to delete edition.", Severity.Error);
+        }
+    }
+
+    private async Task RespondToApplication(int applicationId, bool response)
+    {
+        var result = await QuizEditionApplicationService.RespondToApplication
+        (
+            new ApplicationResponseDto(applicationId, response)
+        );
+
+        if (result)
+        {
+            if (response)
+            {
+                Snackbar.Add("Team accepted.", Severity.Success);
+                acceptedApplications = await QuizEditionApplicationService.GetAcceptedApplicationsByEdition(Id);
+            }
+            else
+                Snackbar.Add("Team rejected.", Severity.Info);
+
+            unansweredApplications = await QuizEditionApplicationService.GetApplications(Id);
+
+            await Task.Delay(10);
+            StateHasChanged();
+        }
+        else
+        {
+            if (response)
+                Snackbar.Add("Failed to accept team.", Severity.Error);
+            else
+                Snackbar.Add("Failed to reject team.", Severity.Error);
+        }
+    }
+
+    private bool HasAnyPermission(HostPermissionsDto permissions)
+    {
+        if (permissions.CreateEdition)
+            return true;
+        if (permissions.EditEdition)
+            return true;
+        if (permissions.DeleteEdition)
+            return true;
+        if (permissions.CrudQuestion)
+            return true;
+        if (permissions.ManageApplication)
+            return true;
+
+        return false;
+    }
+}

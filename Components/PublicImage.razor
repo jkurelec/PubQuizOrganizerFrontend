@@ -6,7 +6,9 @@
         <img src="@ResolvedImageUrl"
              alt="@Alt"
              class="@CssClass"
-             loading="lazy" />
+             loading="lazy"
+             style="@ImageStyle"
+             onerror="@OnImageError" />
     }
     else
     {
@@ -45,6 +47,7 @@
     [Parameter] public string CssClass { get; set; } = "img-fluid rounded";
     [Parameter] public bool IsEditable { get; set; } = false;
     [Parameter] public EventCallback<IBrowserFile> OnEditClicked { get; set; }
+    [Parameter] public int? RemSize { get; set; }
 
     private string? ResolvedImageUrl =>
         string.IsNullOrWhiteSpace(ImageName)
@@ -53,7 +56,7 @@
 
     private string Alt { get; set; } = string.Empty;
 
-    private InputFile hiddenFileInput;
+    private InputFile? hiddenFileInput;
 
     protected override void OnParametersSet()
     {
@@ -62,7 +65,7 @@
 
     private async Task TriggerFileUpload()
     {
-        await JS.InvokeVoidAsync("triggerClick", hiddenFileInput.Element);
+        await JS.InvokeVoidAsync("triggerClick", hiddenFileInput?.Element);
     }
 
     private async Task HandleFileChange(InputFileChangeEventArgs e)
@@ -73,4 +76,14 @@
             await OnEditClicked.InvokeAsync(file);
         }
     }
+
+    void OnImageError(EventArgs e)
+    {
+        ImageName = "default.jpg";
+        StateHasChanged();
+    }
+
+    private string ImageStyle => RemSize != null
+        ? $"max-width: {RemSize}rem; max-height: {RemSize}rem; object-fit: contain;"
+        : "object-fit: contain;";
 }

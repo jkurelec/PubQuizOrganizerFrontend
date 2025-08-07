@@ -1,0 +1,51 @@
+﻿@typeparam T
+
+<MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+    @if (!isEditing)
+    {
+        <MudText Typo="Typo.subtitle2">@Label: @Value</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Edit" OnClick="@(() => isEditing = true)" />
+    }
+    else
+    {
+        @if (typeof(T) == typeof(string))
+        {
+            <MudTextField T="T" Value="Value" ValueChanged="OnChanged" Label="@Label" Immediate="true" />
+        }
+        else if (typeof(T) == typeof(decimal))
+        {
+            <MudNumericField T="T" Value="Value" ValueChanged="OnChanged" Label="@Label" Immediate="true" />
+        }
+        else if (typeof(T).IsEnum)
+        {
+            <MudSelect T="T" Value="Value" ValueChanged="OnChanged" Label="@Label">
+                @foreach (var option in Options ?? Enumerable.Empty<T>())
+                {
+                    <MudSelectItem Value="option">@option</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    }
+</MudStack>
+
+@code {
+    [Parameter]
+    public required T Value { get; set; }
+
+    [Parameter]
+    public EventCallback<T> OnValueChanged { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "";
+
+    [Parameter]
+    public IEnumerable<T>? Options { get; set; }
+
+    private bool isEditing = false;
+
+    private async Task OnChanged(T newValue)
+    {
+        Value = newValue;
+        await OnValueChanged.InvokeAsync(newValue);
+    }
+}

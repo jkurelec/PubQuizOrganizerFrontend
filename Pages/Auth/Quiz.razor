@@ -18,54 +18,111 @@
     }
     else
     {
-        <MudGrid Class="mb-4 d-flex align-items-center">
-            <MudItem>
-                <MudAvatar Size="Size.Large" Class="me-2">
-                    <PublicImage ImageName="@quiz.ProfileImage"
-                                 ResourceType="MediaServerResource.Quiz"
-                                 CssClass="img-fluid rounded"
-                                 IsEditable="userHost?.IsOwner ?? false"
-                                 OnEditClicked="HandleQuizImageUpload" />
-                </MudAvatar>
-            </MudItem>
-            <MudItem xs="12" sm="8" md="9">
-                @if (isEditingName)
-                {
-                    <MudTextField @bind-Value="quizName"
-                    Variant="Variant.Outlined"
-                    Immediate="true"
-                    AutoFocus="true"
-                    OnKeyDown="HandleNameKeyDown"
-                    Adornment="Adornment.End"
-                    AdornmentIcon="@Icons.Material.Filled.Save"
-                    OnAdornmentClick="SaveQuizName" />
-                }
-                else
-                {
-                    <MudText Typo="Typo.h4">
-                        @quiz.Name
-                        @if (userHost?.IsOwner == true)
-                        {
-                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                            Color="Color.Primary"
-                            Size="Size.Small"
-                            Class="ms-2"
-                            OnClick="() => StartEditingName()" />
-                        }
-                    </MudText>
-                }
+        <MudGrid Class="mb-4 align-items-center">
+            <MudItem xs="12" class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <MudAvatar Size="Size.Large" Class="me-2">
+                        <PublicImage ImageName="@quiz.ProfileImage"
+                        ResourceType="MediaServerResource.Quiz"
+                        CssClass="img-fluid rounded"
+                        IsEditable="userHost?.IsOwner ?? false"
+                        OnEditClicked="HandleQuizImageUpload" />
+                    </MudAvatar>
 
-                <MudText Typo="Typo.subtitle2">Rating: @quiz.Rating | Editions Hosted: @quiz.EditionsHosted</MudText>
-                <MudText Typo="Typo.body2">
-                    Organization:
-                    <MudLink Href="@($"/organization/{quiz.Organization.Id}")">@quiz.Organization.Name</MudLink>
-                </MudText>
+                    <div>
+                        @if (isEditingName)
+                        {
+                            <MudTextField @bind-Value="quizName"
+                            Variant="Variant.Outlined"
+                            Immediate="true"
+                            AutoFocus="true"
+                            OnKeyDown="HandleNameKeyDown"
+                            Adornment="Adornment.End"
+                            AdornmentIcon="@Icons.Material.Filled.Save"
+                            OnAdornmentClick="SaveQuizName" />
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.h4">
+                                @quiz.Name
+                                @if (userHost?.IsOwner == true)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                    Color="Color.Primary"
+                                    Class="ms-2"
+                                    OnClick="() => StartEditingName()" />
+                                }
+                            </MudText>
+                        }
+
+                        <MudText Typo="Typo.subtitle2">Rating: @quiz.Rating | Editions Hosted: @quiz.EditionsHosted</MudText>
+                        <MudText Typo="Typo.body2">
+                            Organization:
+                            <MudLink Href="@($"/organization/{quiz.Organization.Id}")">@quiz.Organization.Name</MudLink>
+                        </MudText>
+                    </div>
+                </div>
+
+                @if (userHost?.IsOwner == true && (quiz.QuizEditions?.Count() ?? 0) == 0 && (quiz.QuizLeagues?.Count() ?? 0) == 0)
+                {
+                    <MudItem>
+                        <div class="ms-auto position-relative d-inline-block">
+                            <MudButton Color="Color.Error"
+                            Variant="Variant.Outlined"
+                            Size="Size.Small"
+                            StartIcon="@Icons.Material.Filled.Delete"
+                            OnClick="() => showConfirmDelete = true"
+                            @ref="deleteButtonRef">
+                                Delete
+                            </MudButton>
+
+                            <MudPopover Open="@showConfirmDelete"
+                            Class="pa-3">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2">Confirm deletion?</MudText>
+                                <div class="d-flex justify-content-end">
+                                    <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="DeleteQuiz">Delete</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Class="me-2" OnClick="() => showConfirmDelete = false">Cancel</MudButton>
+                                </div>
+                            </MudPopover>
+                        </div>
+                    </MudItem>
+                }
             </MudItem>
         </MudGrid>
 
+        @if (todaysEdition != null)
+        {
+            <MudPaper>
+                <MudItem xs="12">
+                    <MudCard Style="cursor: pointer; align-content:center; flex-wrap:wrap" Class="w-100" @onclick="() => NavigateToEdition(todaysEdition.Id)">
+                        <PublicImage ImageName="@todaysEdition!.ProfileImage"
+                                     ResourceType="MediaServerResource.Edition"
+                                     RemSize="12"
+                                     CssClass="me-3 img-fluid" />
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6">@todaysEdition.Name</MudText>
+                            <MudText Typo="Typo.body2">@todaysEdition.Category.Name</MudText>
+                            <MudText Typo="Typo.body2">@todaysEdition.Time.ToLocalTime()</MudText>
+                            <MudText Typo="Typo.body2">Rating: @todaysEdition.Rating</MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudPaper>
+        }
+
         <MudTabs Rounded="true" Centered="true">
-            <!-- Upcoming Editions Tab -->
             <MudTabPanel Text="Upcoming Editions">
+                @if (userHost?.HostPermissions.CreateEdition == true)
+                {
+                    <MudButton Variant="Variant.Filled"
+                    Color="Color.Primary"
+                    FullWidth
+                    Class="mt-4 mb-4"
+                    OnClick="@(() => Navigation.NavigateTo($"/create-edition/{quizId}"))">
+                        Create Edition
+                    </MudButton>
+                    <MudDivider Class="my-4" />
+                }
                 @if (!upcomingEditions.Any())
                 {
                     <MudText>No upcoming editions available.</MudText>
@@ -76,13 +133,15 @@
                         @foreach (var edition in upcomingEditions)
                         {
                             <MudItem xs="12" sm="6" md="4">
-                                <MudCard Style="cursor: pointer;" @onclick="() => NavigateToEdition(edition.Id)">
-                                    <MudCardMedia Image="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.Quiz)}{edition.ProfileImage}")"
-                                    Height="140" />
+                                <MudCard Style="cursor: pointer; align-content:center; flex-wrap:wrap" @onclick="() => NavigateToEdition(edition.Id)">
+                                    <PublicImage ImageName="@edition.ProfileImage"
+                                    ResourceType="MediaServerResource.Edition"
+                                    RemSize="12"
+                                    CssClass="me-3 img-fluid" />
                                     <MudCardContent>
                                         <MudText Typo="Typo.h6">@edition.Name</MudText>
                                         <MudText Typo="Typo.body2">@edition.Category.Name</MudText>
-                                        <MudText Typo="Typo.body2">@edition.Time.ToLocalTime():f</MudText>
+                                        <MudText Typo="Typo.body2">@edition.Time.ToLocalTime()</MudText>
                                         <MudText Typo="Typo.body2">Rating: @edition.Rating</MudText>
                                     </MudCardContent>
                                 </MudCard>
@@ -105,10 +164,68 @@
                         {
                             <MudListItem Class="cursor-pointer" @onclick="() => NavigateToEdition(edition.Id)">
                                 <MudText Typo="Typo.subtitle2">@edition.Name</MudText>
-                                <MudText Typo="Typo.body2">@edition.Time.ToLocalTime():f | Rating: @edition.Rating</MudText>
+                                <MudText Typo="Typo.body2">@edition.Time.ToLocalTime() | Rating: @edition.Rating</MudText>
                             </MudListItem>
                         }
                     </MudList>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Leagues">
+                @if (userHost?.IsOwner == true)
+                {
+                    <MudButton Variant="Variant.Filled"
+                    Color="Color.Primary"
+                    FullWidth
+                    Class="mt-4 mb-4"
+                    OnClick="@(() => Navigation.NavigateTo($"/create-league/{quizId}"))">
+                        Create League
+                    </MudButton>
+                    <MudDivider Class="my-4" />
+                }
+                @if (quiz.QuizLeagues == null || !quiz.QuizLeagues.Any())
+                {
+                    <MudText>No leagues available.</MudText>
+                }
+                else
+                {
+                    <MudExpansionPanels>
+                        <MudExpansionPanel Text="Ongoing Leagues" Expanded="true">
+                            @if (!quiz.QuizLeagues.Any(l => !l.Finished))
+                            {
+                                <MudText Class="pa-2">No ongoing leagues.</MudText>
+                            }
+                            else
+                            {
+                                <MudList T="QuizLeagueMinimalDto">
+                                    @foreach (var league in quiz.QuizLeagues.Where(l => !l.Finished))
+                                    {
+                                        <MudListItem Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)" >
+                                            <MudText Typo="Typo.subtitle1">@league.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                        </MudExpansionPanel>
+
+                        <MudExpansionPanel Text="Finished Leagues">
+                            @if (!quiz.QuizLeagues.Any(l => l.Finished))
+                            {
+                                <MudText Class="pa-2">No finished leagues.</MudText>
+                            }
+                            else
+                            {
+                                <MudList T="QuizLeagueMinimalDto">
+                                    @foreach (var league in quiz.QuizLeagues.Where(l => l.Finished))
+                                    {
+                                        <MudListItem Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)">
+                                            <MudText Typo="Typo.subtitle1">@league.Name</MudText>
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
                 }
             </MudTabPanel>
 
@@ -123,7 +240,7 @@
                     @foreach (var host in hosts)
                     {
                         <MudPaper Class="pa-3 mb-2">
-                            <MudGrid AlignItems="Center">
+                            <MudGrid>
                                 <!-- Left: Profile Image -->
                                 <MudItem xs="12" sm="1" Class="d-flex justify-center">
                                     <MudAvatar Size="Size.Large">
@@ -204,7 +321,7 @@
                     <div class="d-flex flex-wrap mt-2">
                         @foreach (var cat in quiz.Categories)
                         {
-                            <MudChip T="QCategoryDto" OnClose="() => RemoveCategory(cat)" Closeable="true" Class="ma-1">@cat.Name</MudChip>
+                            <MudChip T="QCategoryDto" OnClose="() => RemoveCategory(cat)" Class="ma-1">@cat.Name</MudChip>
                         }
                     </div>
                 }
@@ -243,7 +360,7 @@
                     <div class="d-flex flex-wrap mt-2">
                         @foreach (var loc in quiz.Locations)
                         {
-                            <MudChip T="LocationBriefDto" OnClose="() => RemoveLocation(loc)" Closeable="true" Class="ma-1">
+                            <MudChip T="LocationBriefDto" OnClose="() => RemoveLocation(loc)" Class="ma-1">
                                 @DisplayLocation(loc)
                             </MudChip>
                         }
@@ -286,6 +403,9 @@
     private QCategoryDto? selectedCategory;
     private LocationDetailedDto? selectedLocation;
     private List<QCategoryDto> allCategories = new();
+    private bool showConfirmDelete = false;
+    private MudButton? deleteButtonRef;
+    private QuizEditionMinimalDto? todaysEdition;
 
     protected override async Task OnInitializedAsync()
     {
@@ -310,6 +430,10 @@
             .Where(e => e.Time <= now)
             .OrderByDescending(e => e.Time)
             .ToList();
+
+        todaysEdition = quiz.QuizEditions
+            .Where(x => x.Time.Date == DateTime.UtcNow.Date)
+            .FirstOrDefault();
 
         hosts = await OrganizationService.GetHostsByQuiz(quiz.Id).ContinueWith(x => x.Result.ToList());
         user = await UserInfoService.GetUserInfo();
@@ -536,4 +660,16 @@
     private string DisplayLocation(LocationBriefDto loc) =>
         loc == null ? string.Empty : $"{loc.Name} — {loc.Address}, {loc.City}, {loc.Country}";
 
+    private void NavigateToLeague(int leagueId)
+    {
+        Navigation.NavigateTo($"/league/{leagueId}");
+    }
+
+    private async Task DeleteQuiz()
+    {
+        showConfirmDelete = false;
+
+        await QuizService.Delete(quiz!.Id);
+        Navigation.NavigateTo($"/organization/{quiz.Organization.Id}");
+    }
 }

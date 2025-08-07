@@ -1,0 +1,239 @@
+﻿@page "/update-edition/{editionId:int}"
+@attribute [Authorize]
+
+@inject IQuizEditionService QuizEditionService
+@inject IQuizService QuizService
+@inject IOrganizationService OrganizationService
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Update Edition</PageTitle>
+
+<MudPaper Class="pa-6 mx-auto" Style="max-width: 900px">
+    <MudText Typo="Typo.h4" GutterBottom>Update Quiz Edition</MudText>
+
+    @if (edition == null || quiz == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <MudForm @ref="form" Model="this">
+            <MudTextField @bind-Value="Name" Label="Name" Required="true" Class="pb-3" />
+
+            <MudSelect T="int?" @bind-Value="HostId" Label="Host" Required="true" Class="pb-3">
+                @foreach (var host in hosts)
+                {
+                    <MudSelectItem Value="@((int?)host.UserBrief.Id)">@host.UserBrief.Username</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="CategoryId" Label="Category" Required="true" Class="pb-3">
+                @foreach (var cat in categories)
+                {
+                    <MudSelectItem Value="@((int?)cat.Id)">@cat.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="LocationId" Label="Location" Required="true" Class="pb-3">
+                @foreach (var loc in locations)
+                {
+                    if (loc.Id.HasValue)
+                    {
+                        <MudSelectItem Value="@((int?)loc.Id.Value)">@loc.Name</MudSelectItem>
+                    }
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="LeagueId" Label="League (Optional)" Class="pb-3">
+                <MudSelectItem T="int?" Value="@(null)">None</MudSelectItem>
+                @foreach (var league in leagues)
+                {
+                    <MudSelectItem T="int?" Value="@((int?)league.Id)">@league.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="int?" @bind-Value="FeeType" Label="Fee Type" Required="true" Class="pb-3">
+                <MudSelectItem Value="(int?)1">Per Team</MudSelectItem>
+                <MudSelectItem Value="(int?)2">Per Member</MudSelectItem>
+                <MudSelectItem Value="(int?)3">Free</MudSelectItem>
+            </MudSelect>
+
+            <MudNumericField T="int?" @bind-Value="Fee" Label="Fee Amount" Required="true" Class="pb-3" />
+            <MudNumericField T="int?" @bind-Value="Duration" Label="Duration (minutes)" Required="true" Class="pb-3" />
+            <MudNumericField T="int?" @bind-Value="MaxTeamSize" Label="Max Team Size" Min="1" Max="6" Required="true" Class="pb-3" />
+            <MudNumericField T="int?" @bind-Value="MaxTeams" Label="Max Teams" Min="2" Required="true" Class="pb-3" />
+            <MudTextField T="string" @bind-Value="Description" Label="Description" Lines="3" Class="pb-3" />
+
+            <MudSelect T="int?" @bind-Value="Visibility" Label="Visibility" Required="true" Class="pb-3">
+                <MudSelectItem Value="(int?)0">Invisible</MudSelectItem>
+                <MudSelectItem Value="(int?)1">Only Attendee</MudSelectItem>
+                <MudSelectItem Value="(int?)2">Visible</MudSelectItem>
+            </MudSelect>
+
+            <MudTextField @bind-Value="TimeString" Label="Edition Date/Time" InputType="InputType.DateTimeLocal" Required="true" Class="pb-3" />
+            <MudTextField @bind-Value="RegistrationStartString" Label="Registration Start" InputType="InputType.DateTimeLocal" Required="true" Class="pb-3" />
+            <MudTextField @bind-Value="RegistrationEndString" Label="Registration End" InputType="InputType.DateTimeLocal" Required="true" Class="pb-3" />
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.h6">Prizes</MudText>
+
+            @foreach (var prize in prizes)
+            {
+                <MudPaper Class="pa-3 mb-2">
+                    <MudTextField @bind-Value="prize.Name" Label="Prize Name" Required="true" />
+                    <MudNumericField T="int?" @bind-Value="prize.Position" Label="Position (optional)" />
+                    <MudButton Color="Color.Error" Variant="Variant.Text" OnClick="@(() => RemovePrize(prize))">Remove</MudButton>
+                </MudPaper>
+            }
+
+            <MudButton Color="Color.Primary" Variant="Variant.Outlined" OnClick="AddPrize">Add Prize</MudButton>
+
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Class="mt-4" OnClick="OnUpdateEdition">
+                Update Edition
+            </MudButton>
+        </MudForm>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int editionId { get; set; }
+
+    private MudForm? form;
+
+    private QuizEditionDetailedDto? edition;
+    private QuizDetailedDto? quiz;
+
+    private IEnumerable<HostDto> hosts = new List<HostDto>();
+    private IEnumerable<LocationBriefDto> locations = new List<LocationBriefDto>();
+    private IEnumerable<QCategoryDto> categories = new List<QCategoryDto>();
+    private IEnumerable<QuizLeagueMinimalDto> leagues = new List<QuizLeagueMinimalDto>();
+
+    private string Name = string.Empty;
+    private int? HostId;
+    private int? CategoryId;
+    private int? LocationId;
+    private int? LeagueId;
+    private int? FeeType;
+    private int? Fee;
+    private int? Duration;
+    private int? MaxTeamSize;
+    private int? MaxTeams;
+    private string Description = string.Empty;
+    private int? Visibility;
+    private string TimeString = "";
+    private string RegistrationStartString = "";
+    private string RegistrationEndString = "";
+    private List<PrizeDto> prizes = [];
+
+    private DateTime? Time => ParseDateTime(TimeString);
+    private DateTime? RegistrationStart => ParseDateTime(RegistrationStartString);
+    private DateTime? RegistrationEnd => ParseDateTime(RegistrationEndString);
+
+    private static DateTime? ParseDateTime(string input)
+    {
+        return DateTime.TryParse(input, out var dt)
+            ? DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime()
+            : null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        edition = await QuizEditionService.GetById(editionId);
+        if (edition == null)
+        {
+            Snackbar.Add("Edition not found.", Severity.Error);
+            Nav.NavigateTo("/quizzes");
+            return;
+        }
+
+        quiz = await QuizService.GetDetailedById(edition.Quiz.Id);
+        hosts = await OrganizationService.GetHostsByQuiz(edition.Quiz.Id);
+
+        locations = quiz?.Locations ?? [];
+        categories = quiz?.Categories ?? [];
+        leagues = quiz?.QuizLeagues?.Where(l => !l.Finished).ToList() ?? [];
+
+        Name = edition.Name;
+        HostId = edition.Host.Id;
+        CategoryId = edition.Category.Id;
+        LocationId = edition.Location.Id;
+        LeagueId = edition.League?.Id;
+        FeeType = (int?)edition.FeeType;
+        Fee = edition.Fee;
+        Duration = edition.Duration;
+        MaxTeamSize = edition.MaxTeamSize;
+        MaxTeams = edition.MaxTeams;
+        Description = edition.Description ?? string.Empty;
+        Visibility = (int?)edition.Visibility;
+
+        TimeString = edition.Time.ToLocalTime().ToString("yyyy-MM-ddTHH:mm");
+        RegistrationStartString = edition.RegistrationStart.ToLocalTime().ToString("yyyy-MM-ddTHH:mm");
+        RegistrationEndString = edition.RegistrationEnd.ToLocalTime().ToString("yyyy-MM-ddTHH:mm");
+
+        prizes = edition.Prizes?.ToList() ?? [];
+    }
+
+    private async Task OnUpdateEdition()
+    {
+        await form!.Validate();
+        if (!form.IsValid || !ValidateDateLogic())
+            return;
+
+        var dto = new NewQuizEditionDto
+        {
+            Id = editionId,
+            Name = Name,
+            QuizId = quiz!.Id,
+            HostId = HostId!.Value,
+            CategoryId = CategoryId!.Value,
+            LocationId = LocationId!.Value,
+            LeagueId = LeagueId,
+            FeeType = FeeType!.Value,
+            Fee = Fee,
+            Duration = Duration,
+            MaxTeamSize = MaxTeamSize,
+            MaxTeams = MaxTeams!.Value,
+            Description = Description,
+            Visibility = Visibility!.Value,
+            Time = Time!.Value,
+            RegistrationStart = RegistrationStart!.Value,
+            RegistrationEnd = RegistrationEnd!.Value,
+            Prizes = prizes
+        };
+
+        var result = await QuizEditionService.Update(dto);
+
+        if (result != null)
+            Nav.NavigateTo($"/edition/{editionId}");
+        else
+            Snackbar.Add("Failed to update edition.", Severity.Error);
+    }
+
+    private void AddPrize() => prizes.Add(new PrizeDto { Name = string.Empty });
+
+    private void RemovePrize(PrizeDto prize) => prizes.Remove(prize);
+
+    private bool ValidateDateLogic()
+    {
+        if (RegistrationStart == null || RegistrationEnd == null || Time == null)
+        {
+            Snackbar.Add("All dates must be set.", Severity.Error);
+            return false;
+        }
+
+        if (RegistrationStart >= RegistrationEnd)
+        {
+            Snackbar.Add("Registration start must be before registration end.", Severity.Error);
+            return false;
+        }
+
+        if (RegistrationEnd >= Time)
+        {
+            Snackbar.Add("Registration end must be before edition time.", Severity.Error);
+            return false;
+        }
+
+        return true;
+    }
+}

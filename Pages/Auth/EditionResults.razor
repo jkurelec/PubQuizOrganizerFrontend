@@ -1,0 +1,27 @@
+﻿@page "/edition-results/{EditionId:int}"
+
+@inject NavigationManager Nav
+
+<PageTitle>Edition Results</PageTitle>
+
+@if (detailed)
+{
+    <DualEditionResults EditionId="EditionId" />
+}
+else
+{
+    <BriefEditionResults EditionId="EditionId" />
+}
+
+@code {
+    [Parameter]
+    public int EditionId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public bool detailed { get; set; } = false;
+
+    protected override void OnInitialized()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+    }
+}

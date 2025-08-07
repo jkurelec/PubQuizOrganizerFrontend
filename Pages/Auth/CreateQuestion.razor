@@ -1,0 +1,118 @@
+﻿@page "/create-question/{SegmentId:int}"
+
+@inject IUpcomingQuizQuestionService QuizQuestionService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<MudPaper Class="pa-4 mx-auto" MaxWidth="600px">
+    <MudForm @ref="_form" @bind-IsValid="_isValid">
+        <MudSelect T="QuestionType" Label="Question Type" @bind-Value="question.Type" Required="true">
+            @foreach (var type in Enum.GetValues(typeof(QuestionType)).Cast<QuestionType>())
+            {
+                <MudSelectItem Value="@type">@type.ToString()</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField @bind-Value="question.Question" Label="Question Text" Required="true" />
+        @if (question.Type != QuestionType.MULTIPLE_CHOICE)
+        {
+            <MudTextField @bind-Value="question.Answer" Label="Answer" Required="true" />
+        }
+        @if (question.Type == QuestionType.MULTIPLE_CHOICE)
+        {
+            <MudText Typo="Typo.subtitle2">Multiple Choice Options</MudText>
+            @foreach (var option in multipleChoiceOptions)
+            {
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudTextField @bind-Value="option.Text" Placeholder="Option text" />
+                    <MudCheckBox T="bool"@bind-Value="option.IsCorrect" Label="Correct" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveOption(option))" />
+                </MudStack>
+            }
+            <MudButton Variant="Variant.Outlined" OnClick="AddOption" StartIcon="@Icons.Material.Filled.Add">Add Option</MudButton>
+        }
+        <MudNumericField T="decimal" @bind-Value="question.Points" Label="Points" Required="true" />
+        <MudNumericField T="decimal" @bind-Value="question.BonusPoints" Label="Bonus Points" />
+
+        @if (RequiresMedia(question.Type))
+        {
+            <MudText Typo="Typo.caption">Upload @question.Type.ToString().ToLower() file:</MudText>
+            <InputFile OnChange="OnFileChanged"/>
+            @if (file != null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Success">@file.Name selected</MudText>
+            }
+        }
+
+        <MudButton OnClick="Submit" Color="Color.Primary" Variant="Variant.Filled">Submit</MudButton>
+    </MudForm>
+</MudPaper>
+
+@code {
+    [Parameter] public int SegmentId { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private QuizQuestionDto question = new();
+    private List<MultipleChoiceOption> multipleChoiceOptions = new();
+    private IBrowserFile? file;
+
+    protected override void OnInitialized()
+    {
+        question.SegmentId = SegmentId;
+    }
+
+    private void OnFileChanged(InputFileChangeEventArgs e)
+    {
+        file = e.File;
+    }
+
+    private bool RequiresMedia(QuestionType type) =>
+        type == QuestionType.IMAGE || type == QuestionType.AUDIO || type == QuestionType.VIDEO;
+
+    private async Task Submit()
+    {
+        await _form?.Validate()!;
+
+        if (!_isValid)
+            return;
+
+        if (question.Type == QuestionType.MULTIPLE_CHOICE)
+        {
+            char option = 'a';
+            question.Question += string.Join("", multipleChoiceOptions.Select(o => $"{option++}) {o.Text}||"));
+            option = 'a';
+            question.Answer = string.Join("", multipleChoiceOptions.Select(o =>
+            {
+                var current = option;
+                option++;
+                return o.IsCorrect ? $"{current})||" : "";
+            }));
+        }
+
+        try
+        {
+            var added = await QuizQuestionService.AddQuestion(question, file);
+            await JS.InvokeVoidAsync("history.back");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+        }
+    }
+
+    private void AddOption()
+    {
+        multipleChoiceOptions.Add(new MultipleChoiceOption());
+    }
+
+    private void RemoveOption(MultipleChoiceOption option)
+    {
+        multipleChoiceOptions.Remove(option);
+    }
+
+    public class MultipleChoiceOption
+    {
+        public string Text { get; set; } = string.Empty;
+        public bool IsCorrect { get; set; }
+    }
+}

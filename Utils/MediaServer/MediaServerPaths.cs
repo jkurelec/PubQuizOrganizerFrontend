@@ -1,5 +1,4 @@
 ﻿using PubQuizOrganizerFrontend.Enums;
-using static System.Net.WebRequestMethods;
 
 namespace PubQuizOrganizerFrontend.Utils.MediaServer
 {

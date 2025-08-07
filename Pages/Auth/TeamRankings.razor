@@ -1,0 +1,144 @@
+﻿@layout FullscreenLayout
+@page "/team-ranking/{editionId:int}"
+
+@inject IQuizAnswerService QuizAnswerService
+@inject IUpcomingQuizQuestionService QuizQuestionService
+@inject IJSRuntime JS
+
+<div tabindex="0" @ref="wrapperDiv" @onkeydown="OnKeyDown" style="outline:none;">
+    <MudPaper Class="pa-6" Style="max-width: 90vw; margin: auto;">
+        @if (rounds == null || results == null)
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <MudTable Items="VisibleResults" Hover="true" Bordered="true" Elevation="2" T="QuizEditionResultBriefDto" Class="mt-4" Style="font-size: 1.25rem; line-height: 2rem;">
+                <HeaderContent>
+                    <MudTh Style="min-width: 80px;">Rank</MudTh>
+                    <MudTh>Team</MudTh>
+                    @foreach (var round in rounds)
+                    {
+                        <MudTh Style="text-align: center;">R @round.Number</MudTh>
+                    }
+                    <MudTh>Total</MudTh>
+                </HeaderContent>
+
+                <RowTemplate>
+                    <MudTd Style="min-width: 80px; font-weight: bold;">
+                        @if (context.Rank == 1)
+                        {
+                            <MudIcon Color="Color.Warning" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" />
+                        }
+                        else if (context.Rank == 2)
+                        {
+                            <MudIcon Color="Color.Secondary" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" />
+                        }
+                        else if (context.Rank == 3)
+                        {
+                            <MudIcon Color="Color.Info" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" />
+                        }
+                        else
+                        {
+                            @context.Rank
+                        }
+                    </MudTd>
+                    <MudTd>
+                        <div class="d-flex align-items-center">
+                            <span style="font-weight: 500;">@context.Team.Name</span>
+                        </div>
+                    </MudTd>
+                    @foreach (var round in rounds)
+                    {
+                        var roundResult = context.Rounds.FirstOrDefault(r => r.RoundId == round.Id);
+                        <MudTd Style="text-align: center;">
+                            @((roundResult?.Points)?.ToString("0.##", CultureInfo.InvariantCulture) ?? "-")
+                        </MudTd>
+                    }
+                    <MudTd Style="font-weight: bold;">@context.TotalPoints.ToString("0.##", CultureInfo.InvariantCulture)</MudTd>
+                </RowTemplate>
+                <FooterContent>
+                    <MudTd ColSpan="2"><b>Average</b></MudTd>
+                    @foreach (var round in rounds)
+                    {
+                        var total = results.Sum(r => r.Rounds.FirstOrDefault(x => x.RoundId == round.Id)?.Points ?? 0);
+                        var avg = total / results.Count;
+                        <MudTd>@($"{avg:0.##}/{round.Points:0.##}")</MudTd>
+                    }
+                    <MudTd>
+                        @{
+                            var total = results.Sum(r => r.TotalPoints);
+                            var maxTotal = rounds.Sum(r => r.Points);
+                            var avg = total / results.Count;
+                        }
+                        @($"{avg:0.##}/{maxTotal:0.##}")
+                    </MudTd>
+                </FooterContent>
+            </MudTable>
+            @if (visibleRows < (results?.Count ?? 0))
+            {
+                <MudText Class="mt-2" Align="Align.Center" Color="Color.Secondary" Typo="Typo.caption">
+                    Press <b>Space</b> to reveal more rows...
+                </MudText>
+            }
+        }
+    </MudPaper>
+</div>
+
+@code {
+    [Parameter] public int editionId { get; set; }
+
+    private List<QuizEditionResultBriefDto>? results;
+    private List<QuizRoundBriefDto>? rounds;
+    private IEnumerable<QuizEditionResultBriefDto> VisibleResults =>
+        results == null ? Enumerable.Empty<QuizEditionResultBriefDto>() :
+        results.OrderByDescending(r => r.Rank).Take(visibleRows).OrderBy(r => r.Rank);
+
+    private int visibleRows = 0;
+
+    private ElementReference wrapperDiv;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rounds = (await QuizQuestionService.GetRoundsBrief(editionId))?.OrderBy(r => r.Number).ToList();
+        results = (await QuizAnswerService.GetEditionResults(editionId))?.OrderByDescending(r => r.Rank).ToList();
+        visibleRows = 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await wrapperDiv.FocusAsync();
+            await EnterFullscreenAsync();
+        }
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Code == "Space" || e.Key == " ")
+        {
+            if (results != null && visibleRows < results.Count)
+            {
+                visibleRows++;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task EnterFullscreenAsync()
+    {
+        await JS.InvokeVoidAsync("eval", @"
+        (function() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+            }
+        })()
+    ");
+    }
+}

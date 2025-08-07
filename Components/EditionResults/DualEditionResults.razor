@@ -1,0 +1,23 @@
+﻿<MudStack Row AlignItems="AlignItems.Center" Class="mb-4">
+    <MudSwitch T="bool" @bind-Value="isDetailedMode"
+               Color="Color.Primary"
+               Label="Detailed Results"
+               Class="me-2" />
+</MudStack>
+
+@if (isDetailedMode)
+{
+    <DetailedEditionResults EditionId="EditionId" />
+}
+else
+{
+    <BriefEditionResults EditionId="EditionId" />
+}
+
+@code {
+    [Parameter]
+    public int EditionId { get; set; }
+
+    private bool isDetailedMode;
+}
+

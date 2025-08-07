@@ -1,0 +1,468 @@
+﻿@inject IQuizAnswerService AnswerService
+@inject IUpcomingQuizQuestionService QuestionService
+
+<MudPaper Class="pa-4">
+    @if (rounds == null || results == null)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (!rounds.Any())
+    {
+        <MudOverlay Visible="true" Class="d-flex justify-center align-center" DarkBackground="true">
+            <MudPaper Class="pa-6">
+                <MudText Typo="Typo.h6" Align="Align.Center">
+                    Must Add Rounds To Enter Results!!!
+                </MudText>
+            </MudPaper>
+        </MudOverlay>
+    }
+    else
+    {
+        <MudTable Items="results" Dense="true" Hover="true" Elevation="0" Bordered="true" Class="mt-4">
+            <HeaderContent>
+                <MudTh>Rank</MudTh>
+                <MudTh>Team</MudTh>
+                @foreach (var round in rounds)
+                {
+                    <MudTh>R @round.Number</MudTh>
+                }
+                <MudTh>Total</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    @if (context.Rank == 1)
+                    {
+                        <MudIcon Color="Color.Warning" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else if (context.Rank == 2)
+                    {
+                        <MudIcon Color="Color.Secondary" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else if (context.Rank == 3)
+                    {
+                        <MudIcon Color="Color.Info" Icon="@Icons.Material.Filled.EmojiEvents" />
+                    }
+                    else
+                    {
+                        @context.Rank
+                    }
+                </MudTd>
+                <MudTd>
+                    <div class="d-flex align-items-center">
+                        <PublicImage ImageName="@context.Team.ProfileImage" ResourceType="MediaServerResource.Team" CssClass="me-2" RemSize="2" />
+                        @context.Team.Name
+                    </div>
+                </MudTd>
+                @foreach (var round in rounds)
+                {
+                    var roundResult = context.Rounds.FirstOrDefault(r => r.RoundId == round.Id);
+                    bool isMissing = roundResult == null;
+
+                    <MudTd Class="@(isMissing ? "bg-light-red" : null)" @onclick="() => SelectRound(context.Id, round.Id)">
+                        <span>
+                            @((roundResult?.Points)?.ToString("0.##", CultureInfo.InvariantCulture) ?? "-")
+                        </span>
+                    </MudTd>
+                }
+                <MudTd>@context.TotalPoints.ToString("0.##", CultureInfo.InvariantCulture)</MudTd>
+            </RowTemplate>
+            <FooterContent>
+                <MudTd ColSpan="2"><b>Average</b></MudTd>
+                @foreach (var round in rounds)
+                {
+                    var total = results.Sum(r => r.Rounds.FirstOrDefault(x => x.RoundId == round.Id)?.Points ?? 0);
+                    var avg = total / results.Count;
+                    <MudTd>@($"{avg:0.##}/{round.Points:0.##}")</MudTd>
+                }
+                <MudTd>
+                    @{
+                        var total = results.Sum(r => r.TotalPoints);
+                        var maxTotal = rounds.Sum(r => r.Points);
+                        var avg = total / results.Count;
+                    }
+                    @($"{avg:0.##}/{maxTotal:0.##}")
+                </MudTd>
+            </FooterContent>
+        </MudTable>
+
+        <div class="mt-6" style="display:@(resultId.HasValue && selectedRoundId.HasValue ? "block" : "none")">
+            @if (resultId.HasValue && selectedRoundId.HasValue)
+            {
+                <MudPaper Class="pa-4">
+                    <MudText Typo="Typo.h5">
+                        @($"{selectedTeam?.Name ?? "Unknown Team"} - Round {selectedRound?.Number ?? 0}")
+                    </MudText>
+
+                    @if (tempNewRoundResult?.QuizSegmentResults?.Any() == true)
+                    {
+                        <MudList T="NewQuizRoundResultDto" Dense="true">
+                            @foreach (var segment in selectedRound.QuizSegments)
+                            {
+                                var segmentResult = GetSegmentResult(segment.Id);
+                                <MudListItem>
+                                    <b>Segment #@segment.Number</b>
+
+                                    <MudList T="QuizAnswerDetailedDto" Dense="true" Class="ms-4">
+
+                                        @foreach (var question in segment.Questions)
+                                        {
+                                            var answer = GetAnswer(segmentResult, question.Id);
+                                            <MudListItem>
+                                                @if (editable)
+                                                {
+                                                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                                                        <MudText Class="me-4">@($"#{question.Number} - Answer: {question.Answer}")</MudText>
+                                                        <MudTextField T="string" @bind-Value="answer.Answer" Class="me-2" />
+                                                        <MudNumericField T="decimal" @bind-Value="answer.Points" Class="me-2" Max="@(question.Points + question.BonusPoints)" />
+                                                        <MudNumericField T="int" @bind-Value="answer.Result" />
+                                                    </MudStack>
+                                                }
+                                                else
+                                                {
+                                                    <MudText>
+                                                        Answer: @question.Answer —
+                                                        @answer.Answer — @answer.Points — @answer.Result
+                                                    </MudText>
+                                                }
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+
+                                    <div class="mt-2">
+                                        <b>Bonus Points:</b>
+                                        @if (editable)
+                                        {
+                                            <MudNumericField T="decimal" @bind-Value="segmentResult.BonusPoints" Max="@segment.BonusPoints" />
+                                        }
+                                        else
+                                        {
+                                            @segmentResult.BonusPoints
+                                        }
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                    else if (tempRoundResult?.QuizSegmentResults?.Any() == true)
+                    {
+                        <MudList T="QuizRoundResultDetailedDto" Dense="true">
+                            @foreach (var segment in selectedRound.QuizSegments)
+                            {
+                                var segmentResult = GetSegmentResult(segment.Id);
+                                <MudListItem>
+                                    <b>Segment #@segment.Number</b>
+
+                                    <MudList T="QuizAnswerDetailedDto" Dense="true" Class="ms-4">
+
+                                        @foreach (var question in segment.Questions)
+                                        {
+                                            var answer = GetAnswer(segmentResult, question.Id);
+                                            <MudListItem>
+                                                @if (editable)
+                                                {
+                                                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                                                        <MudText Class="me-4">@($"#{question.Number} - Answer: {question.Answer}")</MudText>
+                                                        <MudTextField T="string" @bind-Value="answer.Answer" Class="me-2" />
+                                                        <MudNumericField T="decimal" @bind-Value="answer.Points" Class="me-2" Max="@(question.Points + question.BonusPoints)" />
+                                                        <MudNumericField T="int" @bind-Value="answer.Result" />
+                                                    </MudStack>
+                                                }
+                                                else
+                                                {
+                                                    <MudText>
+                                                        Answer: @question.Answer —
+                                                        @answer.Answer — @answer.Points — @answer.Result
+                                                    </MudText>
+                                                }
+                                            </MudListItem>
+                                        }
+                                    </MudList>
+
+                                    <div class="mt-2">
+                                        <b>Bonus Points:</b>
+                                        @if (editable)
+                                        {
+                                            <MudNumericField T="decimal" @bind-Value="segmentResult.BonusPoints" Max="@segment.BonusPoints" />
+                                        }
+                                        else
+                                        {
+                                            @segmentResult.BonusPoints
+                                        }
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveRoundResult">
+                        Save Results
+                    </MudButton>
+                </MudPaper>
+            }
+        </div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int EditionId { get; set; }
+
+    private List<QuizEditionResultDetailedDto> results = new();
+    private List<QuizRoundDto> rounds = new();
+
+    private int? resultId;
+    private int? selectedRoundId;
+    private QuizRoundDto selectedRound = null!;
+    private bool newRound = false;
+
+    private QuizRoundResultDetailedDto? roundResult = null!;
+    private QuizRoundResultDetailedDto tempRoundResult = null!;
+    private NewQuizRoundResultDto newRoundResult = null!;
+    private NewQuizRoundResultDto tempNewRoundResult = null!;
+    private TeamBreifDto selectedTeam = null!;
+    private bool editable;
+
+    protected override async Task OnInitializedAsync()
+    {
+        rounds = (await QuestionService.GetRounds(EditionId)).ToList() ?? new();
+
+        rounds = rounds
+            .OrderBy(r => r.Number)
+            .Select(r =>
+            {
+                r.QuizSegments = r.QuizSegments
+                    .OrderBy(s => s.Number)
+                    .Select(s =>
+                    {
+                        s.Questions = s.Questions
+                            .OrderBy(q => q.Number)
+                            .ToList();
+                        return s;
+                    }).ToList();
+                return r;
+            }).ToList();
+
+        results = (await AnswerService.GetEditionResultsDetailed(EditionId)).ToList() ?? new();
+    }
+
+    private void SelectRound(int teamId, int roundId)
+    {
+        resultId = teamId;
+
+        if (selectedRoundId != roundId)
+        {
+            selectedRoundId = roundId;
+            selectedRound = rounds.FirstOrDefault(x => x.Id == selectedRoundId)!;
+        }
+
+        roundResult = results
+            .FirstOrDefault(r => r.Id == resultId.Value && r.Rounds.Any(rr => rr.RoundId == selectedRoundId.Value))?
+            .Rounds.FirstOrDefault(rr => rr.RoundId == selectedRoundId.Value);
+
+        if (roundResult == null)
+        {
+            newRoundResult = CreateRoundResult(teamId, roundId);
+            newRound = true;
+            tempNewRoundResult = newRoundResult;
+        }
+        else
+        {
+            roundResult = FillRoundResult(teamId, roundId);
+            newRound = false;
+            tempRoundResult = roundResult;
+        }
+
+        selectedTeam = results.FirstOrDefault(r => r.Id == resultId.Value)?.Team!;
+        editable = true;
+    }
+
+    private QuizRoundResultDetailedDto FillRoundResult(int teamId, int roundId)
+    {
+        var selectedResult = results?.FirstOrDefault(r => r.Id == teamId);
+        var selectedRound = rounds?.FirstOrDefault(r => r.Id == roundId);
+        roundResult = selectedResult?.Rounds.FirstOrDefault(rr => rr.RoundId == roundId);
+
+        roundResult!.QuizSegmentResults ??= new List<QuizSegmentResultDetailedDto>();
+
+        if (selectedRound != null)
+        {
+            foreach (var segment in selectedRound.QuizSegments)
+            {
+                var segResult = roundResult.QuizSegmentResults.FirstOrDefault(s => s.SegmentId == segment.Id);
+
+                if (segResult == null)
+                {
+                    segResult = new()
+                    {
+                        RoundResultId = roundResult.Id,
+                        SegmentId = segment.Id,
+                        QuizAnswers = new List<QuizAnswerDetailedDto>()
+                    };
+
+                    roundResult.QuizSegmentResults = roundResult.QuizSegmentResults.Append(segResult).ToList();
+                }
+
+                foreach (var question in segment.Questions)
+                {
+                    var answer = segResult.QuizAnswers.FirstOrDefault(a => a.QuestionId == question.Id);
+
+                    if (answer == null)
+                    {
+                        answer = new QuizAnswerDetailedDto
+                            {
+                                QuestionId = question.Id,
+                                Answer = string.Empty,
+                                Points = 0,
+                                Result = 0,
+                            };
+
+                        segResult.QuizAnswers = segResult.QuizAnswers.Append(answer).ToList();
+                    }
+                }
+            }
+        }
+
+        return roundResult;
+    }
+
+    private NewQuizRoundResultDto CreateRoundResult(int teamId, int roundId)
+    {
+        var selectedResult = results?.FirstOrDefault(r => r.Id == teamId);
+        var selectedRound = rounds?.FirstOrDefault(r => r.Id == roundId);
+        newRoundResult = null!;
+
+        newRoundResult = new NewQuizRoundResultDto
+            {
+                RoundId = roundId,
+                EditionResultId = (int)resultId!,
+                Points = 0,
+                QuizSegmentResults = new List<NewQuizSegmentResultDto>()
+            };
+
+        if (selectedRound != null)
+        {
+            foreach (var segment in selectedRound.QuizSegments)
+            {
+
+                var segResult = new NewQuizSegmentResultDto
+                    {
+                        SegmentId = segment.Id,
+                        BonusPoints = 0,
+                        QuizAnswers = new List<NewQuizAnswerDto>(),
+                    };
+
+                newRoundResult.QuizSegmentResults = newRoundResult.QuizSegmentResults.Append(segResult).ToList();
+
+                foreach (var question in segment.Questions)
+                {
+                    var answer = new NewQuizAnswerDto
+                        {
+                            QuestionId = question.Id,
+                            Answer = string.Empty,
+                            Points = 0,
+                            Result = 0,
+                        };
+                    segResult.QuizAnswers = segResult.QuizAnswers.Append(answer).ToList();
+                }
+            }
+        }
+
+        return newRoundResult;
+    }
+
+    private bool CanSave(NewQuizRoundResultDto result)
+    {
+        return result != null;
+    }
+
+    private async Task SaveRoundResult()
+    {
+        if (newRound)
+            await AnswerService.AddTeamRoundPointsDetailed(tempNewRoundResult);
+        else
+            await AnswerService.UpdateTeamRoundPointsDetailed(tempRoundResult);
+
+        results = (await AnswerService.GetEditionResultsDetailed(EditionId)).ToList() ?? new();
+
+        tempNewRoundResult = null!;
+        tempRoundResult = null!;
+        resultId = null!;
+        selectedRoundId = null!;
+
+        StateHasChanged();
+    }
+
+    private int FindCurrentEditableRoundNumber()
+    {
+        foreach (var round in rounds.OrderBy(r => r.Number))
+        {
+            foreach (var result in results)
+            {
+                var r = result.Rounds.FirstOrDefault(rr => rr.RoundId == round.Id);
+                if (r == null)
+                    return round.Number;
+            }
+        }
+        return -1;
+    }
+
+    private QuizQuestionDto GetQuestion(int questionId)
+    {
+        if (selectedRound == null)
+            return new();
+
+        foreach (var segment in selectedRound!.QuizSegments)
+        {
+            var question = segment.Questions.FirstOrDefault(q => q.Id == questionId);
+
+            if (question != null)
+                return question;
+        }
+
+        return new();
+    }
+
+    private QuizSegmentDto GetSegment(int segmentId)
+    {
+        if (selectedRound == null)
+            return new();
+
+        selectedRound!.QuizSegments.FirstOrDefault(x => x.Id == segmentId);
+
+        return new();
+    }
+
+    private QuizQuestionDto GetAnswer(int questionId)
+    {
+        if (selectedRound == null)
+            return new();
+
+        foreach (var segment in selectedRound!.QuizSegments)
+        {
+            var question = segment.Questions.FirstOrDefault(q => q.Id == questionId);
+
+            if (question != null)
+                return question;
+        }
+
+        return new();
+    }
+
+    private NewQuizSegmentResultDto GetNewSegmentResult(int segmentId)
+    {
+            return tempNewRoundResult!.QuizSegmentResults.FirstOrDefault(x => x.SegmentId == segmentId)!;
+    }
+
+    private NewQuizAnswerDto GetNewAnswer(NewQuizSegmentResultDto segmentResult, int questionId)
+    {
+            return segmentResult!.QuizAnswers.FirstOrDefault(x => x.QuestionId == questionId)!;
+    }
+
+    private QuizSegmentResultDetailedDto GetSegmentResult(int segmentId)
+    {
+            return tempRoundResult!.QuizSegmentResults.FirstOrDefault(x => x.SegmentId == segmentId)!;
+    }
+
+    private QuizAnswerDetailedDto GetAnswer(QuizSegmentResultDetailedDto segmentResult, int questionId)
+    {
+            return segmentResult!.QuizAnswers.FirstOrDefault(x => x.QuestionId == questionId)!;
+    }
+}

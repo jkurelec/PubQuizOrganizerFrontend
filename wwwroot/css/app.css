@@ -124,3 +124,19 @@ html {
 .rotate-180 {
     transform: rotate(180deg);
 }
+
+.hoverable:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+    transition: background-color 0.15s ease-in-out;
+}
+
+.image-wrapper {
+    width: 6rem;
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.bg-light-red {
+    background-color: #ffe5e5;
+}

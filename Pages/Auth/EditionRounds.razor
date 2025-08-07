@@ -1,0 +1,202 @@
+﻿@page "/edition-rounds/{editionId:int}"
+@attribute [Authorize]
+
+@inject NavigationManager Navigation
+@inject IUpcomingQuizQuestionService UpcomingQuizService
+@inject IQuizEditionService EditionService
+
+<PageTitle>Update Rounds - @editionName</PageTitle>
+
+<MudPaper Class="pa-4">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h5">Rounds for: <b>@editionName</b></MudText>
+
+        @if (DetailedQuestions == null)
+        {
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SetDetailedQuestionsAndReload(false)">
+                    Add Just Rounds
+                </MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="() => SetDetailedQuestionsAndReload(true)">
+                    Add Rounds with Questions
+                </MudButton>
+            </MudStack>
+        }
+
+        @if (rounds == null)
+        {
+            <MudProgressCircular Indeterminate />
+        }
+        else if (!rounds.Any())
+        {
+            <MudText>No rounds found.</MudText>
+        }
+        else
+        {
+            <MudList T="QuizRoundBriefDto">
+                @foreach (var round in rounds.OrderBy(r => r.Number))
+                {
+                    <MudListItem Class="mb-4 bg-light-subtle" Style="cursor: pointer;"
+                                 OnClick="@(() => NavigateToRound(round.Id))">
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Spacing="0">
+                                <MudText>Round #@round.Number</MudText>
+                                <MudText Typo="Typo.caption">Id: @round.Id</MudText>
+                                @if (DetailedQuestions == false && editingRoundId == round.Id)
+                                {
+                                    <MudText Typo="Typo.caption">
+                                        Points:
+                                        <MudNumericField @bind-Value="editedPoints"
+                                                         Immediate="true"
+                                                         Max="100"
+                                                         Min="0"
+                                                         Style="width: 80px;" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Check"
+                                                       Color="Color.Success"
+                                                       OnClick="@(() => ConfirmEditPoints(round))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                       Color="Color.Error"
+                                                       OnClick="@CancelEditPoints" />
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudText Typo="Typo.caption">Points: @round.Points</MudText>
+                                        @if (DetailedQuestions == false)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Size="Size.Small"
+                                                           Color="Color.Primary"
+                                                           OnClick="@(() => StartEditPoints(round))" />
+                                        }
+                                    </MudStack>
+                                }
+                            </MudStack>
+
+                            <MudStack Row Spacing="0" OnClick:stopPropagation>
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward"
+                                               Disabled="@IsFirst(round)"
+                                               OnClick="@(() => MoveRound(round, -1))"
+                                               Color="Color.Primary" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward"
+                                               Disabled="@IsLast(round)"
+                                               OnClick="@(() => MoveRound(round, 1))"
+                                               Color="Color.Primary" />
+                            </MudStack>
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        }
+
+        <MudButton StartIcon="@Icons.Material.Filled.Add"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Class="mt-4"
+                   OnClick="AddRound">
+            Add Round
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [Parameter]
+    public int editionId { get; set; }
+
+    [SupplyParameterFromQuery]
+    public string editionName { get; set; } = string.Empty;
+
+    private bool? DetailedQuestions = null;
+    private List<QuizRoundBriefDto>? rounds;
+
+    private int? editingRoundId = null;
+    private decimal editedPoints;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var fetched = await UpcomingQuizService.GetRoundsBrief(editionId);
+        rounds = fetched?.ToList() ?? new();
+
+        DetailedQuestions = await EditionService.HasDetailedQuestions(editionId);
+    }
+
+    private async Task AddRound()
+    {
+        await UpcomingQuizService.AddRound(new() { EditionId = editionId });
+        await OnInitializedAsync();
+    }
+
+    private bool IsFirst(QuizRoundBriefDto round) =>
+        round.Number == rounds?.Min(r => r.Number);
+
+    private bool IsLast(QuizRoundBriefDto round) =>
+        round.Number == rounds?.Max(r => r.Number);
+
+    private async Task MoveRound(QuizRoundBriefDto round, int direction)
+    {
+        var newNumber = round.Number + direction;
+
+        if (newNumber < 1 || newNumber > rounds?.Count)
+            return;
+
+        await UpcomingQuizService.UpdateRoundOrder(new UpdateOrderDto
+            {
+                Id = round.Id,
+                Number = newNumber
+            });
+
+        await OnInitializedAsync();
+    }
+
+    private void NavigateToRound(int roundId)
+    {
+        if (DetailedQuestions != false)
+        {
+            if (!string.IsNullOrWhiteSpace(editionName))
+                Navigation.NavigateTo($"/edition-round/{roundId}?editionName={Uri.EscapeDataString(editionName)}");
+            else
+                Navigation.NavigateTo($"/edition-round/{roundId}");
+        }
+    }
+
+    private async Task SetDetailedQuestionsAndReload(bool value)
+    {
+        var result = await EditionService.SetDetailedQuestions(editionId, value);
+
+        if (result)
+        {
+            DetailedQuestions = value;
+            await OnInitializedAsync();
+        }
+    }
+
+    private void StartEditPoints(QuizRoundBriefDto round)
+    {
+        editingRoundId = round.Id;
+        editedPoints = round.Points;
+    }
+
+    private void CancelEditPoints()
+    {
+        editingRoundId = null;
+        editedPoints = 0;
+    }
+
+    private async Task ConfirmEditPoints(QuizRoundBriefDto round)
+    {
+        var updated = new QuizRoundBriefDto
+            {
+                Id = round.Id,
+                Number = round.Number,
+                Points = editedPoints
+            };
+
+        var result = await UpcomingQuizService.EditRound(updated);
+        if (result != null)
+        {
+            await OnInitializedAsync();
+            editingRoundId = null;
+        }
+    }
+}

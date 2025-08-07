@@ -27,6 +27,14 @@ builder.Services.AddScoped<IQuizService, QuizService>();
 builder.Services.AddScoped<IQuizCategoryService, QuizCategoryService>();
 builder.Services.AddScoped<ILocationService, LocationService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ILocationService, LocationService>();
+builder.Services.AddScoped<IQuizLeagueService, QuizLeagueService>();
+builder.Services.AddScoped<IQuizEditionService, QuizEditionService>();
+builder.Services.AddScoped<IQuizEditionApplicationService, QuizEditionApplicationService>();
+builder.Services.AddScoped<IUpcomingQuizQuestionService, UpcomingQuizQuestionService>();
+builder.Services.AddScoped<IPrivateMediaService, PrivateMediaService>();
+builder.Services.AddScoped<IQuizAnswerService, QuizAnswerService>();
+builder.Services.AddScoped<IEloCalculatorService, EloCalculatorService>();
 
 builder.Services.AddTransient<RetryingTokenHandler>();
 

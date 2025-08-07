@@ -40,6 +40,15 @@
             element.click();
         };
     </script>
+    <script>
+        window.scrollHelpers = {
+            scrollToElement: function (element) {
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        };
+    </script>
 </body>
 
 </html>

@@ -1,0 +1,165 @@
+﻿@page "/edit-question/{Id:int}"
+
+@inject IUpcomingQuizQuestionService QuestionService
+@inject IPrivateMediaService PrivateMediaService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<MudPaper Class="p-4">
+    @if (question == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <MudText Typo="Typo.h5" Class="mb-4">Edit Question #@question.Number</MudText>
+
+        <MudForm @ref="_form" @bind-IsValid="_isValid">
+            <EditableField T="string" Label="Question Text" Value="@question.Question" OnValueChanged="v => question.Question = v" />
+            @if (RequiresMedia(question.Type))
+            {
+                <MudText Typo="Typo.caption" Class="mt-4">Upload @question.Type.ToString().ToLower() file:</MudText>
+                <InputFile OnChange="OnFileChanged" />
+                @if (file != null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Success">@file.Name selected</MudText>
+                }
+                else if (media != null)
+                {
+                    <MediaViewer MediaBytes="media" MediaType="question.Type" />
+                }
+            }
+
+            @if (question.Type == QuestionType.MULTIPLE_CHOICE)
+            {
+                <MudText Typo="Typo.subtitle2" Class="mt-4">Multiple Choice Options</MudText>
+                @foreach (var option in multipleChoiceOptions)
+                {
+                    <MudStack Row Spacing="2" AlignItems="AlignItems.Center">
+                        <MudTextField @bind-Value="option.Text" />
+                        <MudCheckBox T="bool" @bind-Value="option.IsCorrect" Label="Correct" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="() => RemoveOption(option)" />
+                    </MudStack>
+                }
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddOption">Add Option</MudButton>
+            }
+            else
+            {
+                <EditableField T="string" Label="Answer" Value="@question.Answer" OnValueChanged="v => question.Answer = v" />
+            }
+
+            <EditableField T="QuestionType" Label="Type" Value="@question.Type" OnValueChanged="OnTypeChanged" Options="@(Enum.GetValues(typeof(QuestionType)).Cast<QuestionType>())" />
+            <EditableField T="decimal" Label="Points" Value="@question.Points" OnValueChanged="v => question.Points = v" />
+            <EditableField T="decimal" Label="Bonus Points" Value="@question.BonusPoints" OnValueChanged="v => question.BonusPoints = v" />
+            <MudText Typo="Typo.caption">Rating: @question.Rating</MudText>
+        </MudForm>
+
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="!_isValid" Class="mt-4">Save Changes</MudButton>
+        <MudButton OnClick="@(async () => await JS.InvokeVoidAsync("history.back"))" Variant="Variant.Text" Class="mt-2">Back</MudButton>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private MudForm? _form;
+    private bool _isValid;
+    private QuizQuestionDto? question;
+    private byte[]? media;
+    private IBrowserFile? file;
+    private List<MultipleChoiceOption> multipleChoiceOptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        question = await QuestionService.GetQuestion(Id);
+
+        if (question == null) return;
+
+        if (RequiresMedia(question.Type) && question.MediaUrl is not null)
+        {
+            var parts = question.MediaUrl.Split('/');
+            if (parts.Length == 3 && int.TryParse(parts[1], out int editionId))
+            {
+                media = await PrivateMediaService.GetMediaFile(parts[0], editionId, parts[2]);
+            }
+        }
+
+        if (question.Type == QuestionType.MULTIPLE_CHOICE)
+        {
+            multipleChoiceOptions = ParseMultipleChoiceOptions(question.Question, question.Answer);
+        }
+    }
+
+    private void OnFileChanged(InputFileChangeEventArgs e)
+    {
+        file = e.File;
+    }
+
+    private bool RequiresMedia(QuestionType? type) =>
+        type == QuestionType.IMAGE || type == QuestionType.AUDIO || type == QuestionType.VIDEO;
+
+    private async Task Submit()
+    {
+        await _form!.Validate();
+        if (!_isValid) return;
+
+        if (!RequiresMedia(question!.Type))
+        {
+            question.MediaUrl = null;
+            file = null;
+        }
+
+        if (question!.Type == QuestionType.MULTIPLE_CHOICE)
+        {
+            char option = 'a';
+            question.Question = string.Join("", multipleChoiceOptions.Select(o => $"{option++}) {o.Text}||"));
+            option = 'a';
+            question.Answer = string.Join("", multipleChoiceOptions.Select(o => o.IsCorrect ? $"{option++})||" : $"{option++}"));
+        }
+
+        var shouldUploadFile = file is not null;
+
+        await QuestionService.EditQuestion(question, shouldUploadFile ? file : null);
+        await JS.InvokeVoidAsync("history.back");
+    }
+
+
+    private List<MultipleChoiceOption> ParseMultipleChoiceOptions(string questionText, string answerText)
+    {
+        var options = new List<MultipleChoiceOption>();
+        var parts = questionText.Split("||", StringSplitOptions.RemoveEmptyEntries);
+        var corrects = answerText.Split("||", StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var part in parts)
+        {
+            var trimmed = part.Trim();
+            var isCorrect = corrects.Any(c => trimmed.StartsWith(c));
+            options.Add(new MultipleChoiceOption { Text = trimmed[3..], IsCorrect = isCorrect });
+        }
+
+        return options;
+    }
+
+    private void AddOption() => multipleChoiceOptions.Add(new MultipleChoiceOption());
+    private void RemoveOption(MultipleChoiceOption option) => multipleChoiceOptions.Remove(option);
+
+    private void OnTypeChanged(QuestionType type)
+    {
+        question!.Type = type;
+        if (!RequiresMedia(type))
+        {
+            file = null;
+            media = null;
+            question.MediaUrl = null;
+        }
+
+        if (type != QuestionType.MULTIPLE_CHOICE)
+            multipleChoiceOptions.Clear();
+    }
+
+    public class MultipleChoiceOption
+    {
+        public string Text { get; set; } = string.Empty;
+        public bool IsCorrect { get; set; }
+    }
+}

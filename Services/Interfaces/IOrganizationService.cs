@@ -10,7 +10,7 @@ namespace PubQuizOrganizerFrontend.Services.Interfaces
         Task<IEnumerable<OrganizationBriefDto>> GetAll();
         Task<OrganizationBriefDto?> GetById(int id);
         Task<IEnumerable<HostQuizzesDto>> GetHostsFromOrganization(int organizerId);
-        Task<HostDto?> GetHost(int organizerId, int hostId, int quizId);
+        Task<HostDto?> GetHost(int hostId, int quizId);
         Task<OrganizationBriefDto?> Add(NewOrganizationDto newOrganizer);
         Task<HostDto?> AddHost(NewHostDto newHost);
         Task<OrganizationBriefDto?> Update(OrganizationUpdateDto updatedOrganizer);

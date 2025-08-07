@@ -1,0 +1,295 @@
+﻿@page "/league/{leagueId:int}"
+@inject IQuizLeagueService QuizLeagueService
+@inject IOrganizationService OrganizationService
+@inject NavigationManager Nav
+@inject UserInfoService UserInfoService
+@inject ISnackbar Snackbar
+
+<PageTitle>League</PageTitle>
+
+<MudPaper Class="pa-6">
+    @if (league == null)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudPaper Class="pa-4">
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h4">@league.Name</MudText>
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudChip T="string"
+                    Color="@(league.Finished ? Color.Error : Color.Success)"
+                    OnClick="TryShowFinishPopover"
+                    @ref="finishChipRef"
+                    Class="@(CanFinishLeague ? "cursor-pointer" : "")">
+                        @(league.Finished ? "Finished" : "Active")
+                    </MudChip>
+
+                    <MudPopover Open="@showFinishConfirm" Class="pa-3">
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Finish league?</MudText>
+                        <div class="d-flex justify-content-end">
+                            <MudButton Size="Size.Small"
+                                Color="Color.Error"
+                                Variant="Variant.Filled"
+                                OnClick="ConfirmFinishLeague">Finish</MudButton>
+                            <MudButton Size="Size.Small"
+                                Variant="Variant.Text"
+                                Class="me-2"
+                                OnClick="() => showFinishConfirm = false">Cancel</MudButton>
+                        </div>
+                    </MudPopover>
+
+                    @if (IsOwner)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                        Size="Size.Small"
+                        OnClick="@(() => Nav.NavigateTo($"/update-league/{league.Id}"))"
+                        Color="Color.Default"
+                        Class="ms-1" />
+                    }
+                </MudStack>
+                @if (IsOwner == true && (league.Editions?.Count() ?? 0) == 0)
+                {
+                    <div class="ms-auto position-relative d-inline-block" style="float:right;">
+                        <MudButton Color="Color.Error"
+                        Variant="Variant.Outlined"
+                        Size="Size.Small"
+                        StartIcon="@Icons.Material.Filled.Delete"
+                        OnClick="() => showConfirmDeleteLeague = true"
+                        @ref="deleteLeagueButtonRef">
+                            Delete
+                        </MudButton>
+
+                        <MudPopover Open="@showConfirmDeleteLeague"
+                        Class="pa-3">
+                            <MudText Typo="Typo.subtitle2" Class="mb-2">Confirm deletion?</MudText>
+                            <div class="d-flex justify-content-end">
+                                <MudButton Size="Size.Small"
+                                    Color="Color.Error"
+                                    Variant="Variant.Filled"
+                                    OnClick="ConfirmDeleteLeague">Delete</MudButton>
+                                <MudButton Size="Size.Small"
+                                    Variant="Variant.Text"
+                                    Class="me-2"
+                                    OnClick="() => showConfirmDeleteLeague = false">Cancel</MudButton>
+                            </div>
+                        </MudPopover>
+                    </div>
+                }
+            </MudStack>
+
+            <MudText Typo="Typo.subtitle1" Class="mt-2 mb-4">
+                <MudAvatar Size="Size.Small" Class="me-2">
+                    <PublicImage ImageName="@league.Quiz.ProfileImage"
+                    ResourceType="MediaServerResource.Quiz"
+                    CssClass="img-fluid rounded" />
+                </MudAvatar>
+                <MudLink Href="@($"/quiz/{league.Quiz.Id}")" Target="_blank">
+                    @league.Quiz.Name (Rating: @league.Quiz.Rating)
+                </MudLink>
+            </MudText>
+
+            @if (league.Prizes != null && league.Prizes.Any())
+            {
+                <MudPaper Class="pa-3 mb-4" Elevation="0">
+                    <MudText Typo="Typo.h6" Class="mb-2">Prizes</MudText>
+                    @foreach (var prize in league.Prizes)
+                    {
+                        var displayedPrize = prize.Position != null ? prize.Position.ToString() + " - " : "";
+                        displayedPrize += prize.Name;
+                        <MudText>@displayedPrize</MudText>
+                    }
+                </MudPaper>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mb-4" Color="Color.Secondary">No prizes announced yet.</MudText>
+            }
+        </MudPaper>
+    }
+
+    <MudDivider Class="my-2" />
+
+    <MudPaper Class="pa-4 mb-4" Elevation="1">
+        @if (league?.Rounds?.Any() == true)
+        {
+            var sortedRounds = league.Rounds.OrderByDescending(r => r.Round).ToList();
+            var currentRound = sortedRounds[currentRoundIndex];
+
+            <MudStack Row AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Round @currentRound.Round</MudText>
+                <MudStack Row>
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                    Disabled="@(currentRoundIndex == 0)"
+                    OnClick="() => currentRoundIndex--" />
+                    <MudIconButton Icon="@Icons.Material.Filled.ArrowForward"
+                    Disabled="@(currentRoundIndex == sortedRounds.Count - 1)"
+                    OnClick="() => currentRoundIndex++" />
+                </MudStack>
+            </MudStack>
+
+            <MudList T="QuizLeagueRoundEntryDto" Class="mt-3">
+                @{
+                    var sortedEntries = currentRound.QuizLeagueRoundEntries
+                    .OrderByDescending(e => e.Points)
+                    .ToList();
+                }
+
+                @for (int i = 0; i < sortedEntries.Count; i++)
+                {
+                    var entry = sortedEntries[i];
+                    var displayTeam = $"{i + 1}. {entry.Team.Name}";
+                    <MudListItem Class="pa-2">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center">
+                                <MudAvatar Size="Size.Medium">
+                                    <PublicImage ImageName="@entry.Team.ProfileImage"
+                                    ResourceType="MediaServerResource.Team"
+                                    CssClass="img-fluid rounded" />
+                                </MudAvatar>
+
+                                <div class="ms-2">
+                                    <MudText Typo="Typo.subtitle1">@displayTeam</MudText>
+                                </div>
+                            </div>
+
+                            <MudText Typo="Typo.subtitle1" Class="text-end">@entry.Points pts</MudText>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+            <MudDivider Class="my-2" />
+        }
+        @if (league?.Points != null && league.Points.Any())
+        {
+            <MudText Typo="Typo.caption" Class="text-muted">
+                Points: @string.Join(", ", league.Points.Select(x => x.ToString()))
+            </MudText>
+        }
+    </MudPaper>
+    @if (league?.Editions?.Any() == true)
+    {
+        <MudDivider Class="my-2" />
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudText Typo="Typo.h6" Class="mb-2">Editions</MudText>
+            <MudList T="QuizEditionMinimalDto">
+                @foreach (var edition in league.Editions.OrderByDescending(e => e.Time))
+                {
+                    <MudListItem Class="mb-2" Style="cursor: pointer" OnClick="() => Nav.NavigateTo(GetEditionUrl(edition.Id))">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="d-flex">
+                                <MudAvatar Size="Size.Medium" Class="me-2">
+                                    <PublicImage ImageName="@edition.ProfileImage"
+                                    ResourceType="MediaServerResource.Edition"
+                                    CssClass="img-fluid rounded" />
+                                </MudAvatar>
+
+                                <div style="display: flex; flex-direction: column; gap: 2px;">
+                                    <MudText Typo="Typo.subtitle2">@edition.Name</MudText>
+                                    <MudText Typo="Typo.caption">@edition.Category.Name</MudText>
+                                    <MudText Typo="Typo.caption">Rating: @edition.Rating</MudText>
+                                </div>
+                            </div>
+
+                            <div class="text-end">
+                                <MudText Typo="Typo.subtitle2">Teams</MudText>
+                                <MudText Typo="Typo.subtitle2">@edition.AcceptedTeams/@edition.MaxTeams</MudText>
+                            </div>
+                        </div>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+</MudPaper>
+
+@code {
+    [Parameter]
+    public int leagueId { get; set; }
+
+    private QuizLeagueDetailedDto? league;
+    private int currentRoundIndex = 0;
+    private bool IsOwner = false;
+    private UserInfo user = null!;
+    private bool showConfirmDeleteLeague = false;
+    private MudButton? deleteLeagueButtonRef;
+    private bool showFinishConfirm = false;
+    private MudChip<string>? finishChipRef;
+    private bool CanFinishLeague = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        league = await QuizLeagueService.GetDetailedById(leagueId);
+
+        if (league == null)
+            Nav.NavigateTo("/", true);
+
+        var hosts = await OrganizationService.GetHostsByQuiz(league!.Quiz.Id);
+
+        var owner = hosts.FirstOrDefault(x => x.IsOwner == true);
+
+        if (owner == null)
+        {
+            Snackbar.Add("Tell the owner he must be part of all quizzes!", Severity.Error);
+            Nav.NavigateTo("/", true);
+        }
+
+        user = await UserInfoService.GetUserInfo();
+
+        if (user.Id == owner!.UserBrief.Id)
+            IsOwner = true;
+
+        CanFinishLeague =
+            IsOwner == true &&
+            !league!.Finished &&
+            (league.Editions?.Count() ?? 0) > 0;
+    }
+
+    private string GetEditionUrl(int editionId)
+        => $"/edition/{editionId}";
+
+    private async Task ConfirmDeleteLeague()
+    {
+
+        showConfirmDeleteLeague = false;
+
+        await QuizLeagueService.Delete(league!.Id);
+        Nav.NavigateTo("/");
+    }
+
+    private void TryShowFinishPopover()
+    {
+        if (CanFinishLeague)
+        {
+            showFinishConfirm = true;
+        }
+        else
+        {
+            if (!IsOwner)
+                Snackbar.Add("You are not the owner therefore cant finish the league!", Severity.Warning);
+            else if (league!.Editions.Count() == 0)
+                Snackbar.Add("League has no editions!", Severity.Error);
+            else if (league!.Finished)
+                Snackbar.Add("Leagues cannot be reopened!", Severity.Warning);
+        }
+    }
+
+    private async Task ConfirmFinishLeague()
+    {
+        showFinishConfirm = false;
+
+        var updatedleague = await QuizLeagueService.FinishLeagueAsync(league!.Id);
+        if (updatedleague != null)
+        {
+            CanFinishLeague = false;
+            league = updatedleague;
+            Snackbar.Add("League finished successfully.", Severity.Success);
+        }
+        else
+        {
+            Snackbar.Add("Failed to finish the league.", Severity.Error);
+        }
+    }
+}
