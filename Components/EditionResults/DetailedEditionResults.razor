@@ -1,5 +1,6 @@
 ﻿@inject IQuizAnswerService AnswerService
 @inject IUpcomingQuizQuestionService QuestionService
+@inject IEloCalculatorService EloCalculatorService
 
 <MudPaper Class="pa-4">
     @if (rounds == null || results == null)
@@ -18,6 +19,7 @@
     }
     else
     {
+        <MudText Typo="Typo.h5">Rated: @editionRated</MudText>
         <MudTable Items="results" Dense="true" Hover="true" Elevation="0" Bordered="true" Class="mt-4">
             <HeaderContent>
                 <MudTh>Rank</MudTh>
@@ -51,14 +53,23 @@
                     <div class="d-flex align-items-center">
                         <PublicImage ImageName="@context.Team.ProfileImage" ResourceType="MediaServerResource.Team" CssClass="me-2" RemSize="2" />
                         @context.Team.Name
+                        @if (ShouldShowBreakTieButton(context))
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Upgrade"
+                            Color="Color.Success"
+                            Size="Size.Small"
+                            Class="ms-2"
+                            OnClick="@(() => BreakTieAsync(context.Id))" />
+                        }
                     </div>
                 </MudTd>
                 @foreach (var round in rounds)
                 {
                     var roundResult = context.Rounds.FirstOrDefault(r => r.RoundId == round.Id);
                     bool isMissing = roundResult == null;
+                    bool isBrief = roundResult?.QuizSegmentResults.Count() == 0;
 
-                    <MudTd Class="@(isMissing ? "bg-light-red" : null)" @onclick="() => SelectRound(context.Id, round.Id)">
+                    <MudTd Class="@(isMissing ? "bg-light-red" : isBrief == true ? "bg-light-orange" : null)" @onclick="() => SelectRound(context.Id, round.Id)">
                         <span>
                             @((roundResult?.Points)?.ToString("0.##", CultureInfo.InvariantCulture) ?? "-")
                         </span>
@@ -85,6 +96,18 @@
             </FooterContent>
         </MudTable>
 
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" Class="mt-4 ms-2" OnClick="RankTeams" Disabled="@(editionRated)">
+            Rank Teams
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" Class="mt-4 ms-2" OnClick="CalculateRatings" Disabled="@(!canCalculateRank)">
+            Calculate Ratings
+        </MudButton>
+
+        <MudButton Variant="Variant.Filled" Color="Color.Tertiary" Class="mt-4 ms-2" Href=@($"/team-ranking/{EditionId}")>
+            Show Team Rankings
+        </MudButton>
+
         <div class="mt-6" style="display:@(resultId.HasValue && selectedRoundId.HasValue ? "block" : "none")">
             @if (resultId.HasValue && selectedRoundId.HasValue)
             {
@@ -98,7 +121,7 @@
                         <MudList T="NewQuizRoundResultDto" Dense="true">
                             @foreach (var segment in selectedRound.QuizSegments)
                             {
-                                var segmentResult = GetSegmentResult(segment.Id);
+                                var segmentResult = GetNewSegmentResult(segment.Id);
                                 <MudListItem>
                                     <b>Segment #@segment.Number</b>
 
@@ -106,7 +129,7 @@
 
                                         @foreach (var question in segment.Questions)
                                         {
-                                            var answer = GetAnswer(segmentResult, question.Id);
+                                            var answer = GetNewAnswer(segmentResult, question.Id);
                                             <MudListItem>
                                                 @if (editable)
                                                 {
@@ -114,7 +137,15 @@
                                                         <MudText Class="me-4">@($"#{question.Number} - Answer: {question.Answer}")</MudText>
                                                         <MudTextField T="string" @bind-Value="answer.Answer" Class="me-2" />
                                                         <MudNumericField T="decimal" @bind-Value="answer.Points" Class="me-2" Max="@(question.Points + question.BonusPoints)" />
-                                                        <MudNumericField T="int" @bind-Value="answer.Result" />
+                                                        <MudText Color="@GetResultColor(answer.Result)">
+                                                            @(answer.Result switch
+                                                            {
+                                                                0 => "Incorrect",
+                                                                1 => "Partial",
+                                                                2 => "Correct",
+                                                                _ => "Unknown"
+                                                            })
+                                                        </MudText>
                                                     </MudStack>
                                                 }
                                                 else
@@ -164,7 +195,15 @@
                                                         <MudText Class="me-4">@($"#{question.Number} - Answer: {question.Answer}")</MudText>
                                                         <MudTextField T="string" @bind-Value="answer.Answer" Class="me-2" />
                                                         <MudNumericField T="decimal" @bind-Value="answer.Points" Class="me-2" Max="@(question.Points + question.BonusPoints)" />
-                                                        <MudNumericField T="int" @bind-Value="answer.Result" />
+                                                        <MudText Color="@GetResultColor(answer.Result)">
+                                                            @(answer.Result switch
+                                                            {
+                                                                0 => "Incorrect",
+                                                                1 => "Partial",
+                                                                2 => "Correct",
+                                                                _ => "Unknown"
+                                                            })
+                                                        </MudText>
                                                     </MudStack>
                                                 }
                                                 else
@@ -193,8 +232,11 @@
                             }
                         </MudList>
                     }
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveRoundResult">
-                        Save Results
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveRoundResult" Disabled="editionRated">
+                        Save Answers
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="GradeTeamAnswers" Disabled="editionRated">
+                        Grade Answers
                     </MudButton>
                 </MudPaper>
             }
@@ -202,8 +244,43 @@
     }
 </MudPaper>
 
+<MudStack Class="pt-4" Spacing="2" AlignItems="AlignItems.Start">
+    <MudStack Row AlignItems="AlignItems.Start" Spacing="1">
+        <div style="width:16px;height:16px;background-color:lightcoral;border:1px solid #ccc;"></div>
+        <MudText Typo="Typo.caption">Not Entered</MudText>
+    </MudStack>
+
+    <MudStack Row AlignItems="AlignItems.Start" Spacing="1">
+        <div style="width:16px;height:16px;background-color:lightsalmon;border:1px solid #ccc;"></div>
+        <MudText Typo="Typo.caption">No Answers</MudText>
+    </MudStack>
+</MudStack>
+
+@if (!allAnswersEnteredPopUp)
+{
+    <MudPaper Elevation="8" Square="false"
+              Style="position:fixed; top:50%; left:50%; transform: translate(-50%, -50%);
+                     z-index:2000; padding:24px; max-width:400px; text-align:center; background:white;">
+        <MudText Typo="Typo.h6" Class="mb-4">
+            Not entering all the answers will result in less accurate rating calculation
+        </MudText>
+        <MudStack Row Justify="Justify.Center" Spacing="2">
+            <MudButton Color="Color.Warning" Variant="Variant.Filled" OnClick="Proceed">
+                Proceed
+            </MudButton>
+            <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="ClosePopup">
+                Exit
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+
+    <MudOverlay Visible="true" Opacity="0.4" />
+}
+
+
 @code {
-    [Parameter] public int EditionId { get; set; }
+    [Parameter]
+    public int EditionId { get; set; }
 
     private List<QuizEditionResultDetailedDto> results = new();
     private List<QuizRoundDto> rounds = new();
@@ -219,6 +296,9 @@
     private NewQuizRoundResultDto tempNewRoundResult = null!;
     private TeamBreifDto selectedTeam = null!;
     private bool editable;
+    private bool editionRated = false;
+    private bool canCalculateRank = false;
+    private bool allAnswersEnteredPopUp = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -240,7 +320,12 @@
                 return r;
             }).ToList();
 
+        editionRated = await EloCalculatorService.IsEditionRated(EditionId);
         results = (await AnswerService.GetEditionResultsDetailed(EditionId)).ToList() ?? new();
+
+        results = results.OrderBy(x => x.Rank).ToList();
+
+        canCalculateRank = !editionRated && AllResultsEnteredForAllRounds();
     }
 
     private void SelectRound(int teamId, int roundId)
@@ -382,6 +467,8 @@
 
         results = (await AnswerService.GetEditionResultsDetailed(EditionId)).ToList() ?? new();
 
+        results = results.OrderBy(x => x.Rank).ToList();
+
         tempNewRoundResult = null!;
         tempRoundResult = null!;
         resultId = null!;
@@ -446,6 +533,139 @@
         return new();
     }
 
+    private async Task RankTeams()
+    {
+        var newResults = await AnswerService.RankTeamsOnEdition(EditionId);
+
+        if (newResults != null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private async Task CalculateRatings()
+    {
+        allAnswersEnteredPopUp = AllResultsEnteredForAllQuestions();
+
+        if (!allAnswersEnteredPopUp)
+            return;
+
+
+        var success = await EloCalculatorService.CalculateEditionElo(EditionId);
+
+        if (success)
+            editionRated = true;
+
+        canCalculateRank = false;
+        await Task.Delay(10);
+        StateHasChanged();
+    }
+
+    private async Task Proceed()
+    {
+        allAnswersEnteredPopUp = true;
+
+        var success = await EloCalculatorService.CalculateEditionElo(EditionId);
+
+        if (success)
+            editionRated = true;
+
+        canCalculateRank = false;
+        await Task.Delay(10);
+        StateHasChanged();
+    }
+
+    private void ClosePopup()
+    {
+        allAnswersEnteredPopUp = true;
+    }
+
+    private bool AllResultsEnteredForAllRounds()
+    {
+        if (rounds == null || results == null)
+            return false;
+
+        var requiredRoundIds = rounds.Select(r => r.Id).ToHashSet();
+
+        return results.All(result =>
+            result.Rounds != null &&
+            requiredRoundIds.All(roundId =>
+                result.Rounds.Any(rr => rr.RoundId == roundId)
+            )
+        );
+    }
+
+    private bool AllResultsEnteredForAllQuestions()
+    {
+        var expectedSegmentsByRoundId = rounds
+            .ToDictionary(r => r.Id, r => r.QuizSegments.Select(qs => qs.Id).ToHashSet());
+
+        var allSegments = results.All(result =>
+            result.Rounds != null &&
+            result.Rounds.All(rr =>
+                expectedSegmentsByRoundId.TryGetValue(rr.RoundId, out var expectedIds) &&
+                rr.QuizSegmentResults != null &&
+                rr.QuizSegmentResults.Any() &&
+                rr.QuizSegmentResults.All(qsr => expectedIds.Contains(qsr.SegmentId))
+            )
+        );
+
+        return allSegments;
+    }
+
+    private bool ShouldShowBreakTieButton(QuizEditionResultDetailedDto team)
+    {
+        if (!AllResultsEnteredForAllRounds())
+            return false;
+
+        if (results == null)
+            return false;
+
+        var tiedTopRanks = results
+            .Where(r => r.Rank <= 3)
+            .GroupBy(r => r.Rank)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        int total = results.Count;
+        var tiedNearBottom = results
+            .Where(r => r.Rank >= total - 1)
+            .GroupBy(r => r.Rank)
+            .Where(g => g.Count() > 1)
+            .SelectMany(g => g)
+            .Select(r => r.Id)
+            .ToHashSet();
+
+        return tiedTopRanks.Contains(team.Id) || tiedNearBottom.Contains(team.Id);
+    }
+
+    private async Task BreakTieAsync(int promotedId)
+    {
+        await AnswerService.BreakTie(promotedId, EditionId);
+        await OnInitializedAsync();
+    }
+
+    private async Task GradeTeamAnswers()
+    {
+        if (newRound)
+            await AnswerService.GradeTeamAnswers(tempNewRoundResult);
+        else
+            await AnswerService.GradeExistingTeamAnswers(tempRoundResult);
+
+        results = (await AnswerService.GetEditionResultsDetailed(EditionId)).ToList() ?? new();
+
+        results = results.OrderBy(x => x.Rank).ToList();
+
+        tempNewRoundResult = null!;
+        tempRoundResult = null!;
+        resultId = null!;
+        selectedRoundId = null!;
+
+        StateHasChanged();
+    }
+
     private NewQuizSegmentResultDto GetNewSegmentResult(int segmentId)
     {
             return tempNewRoundResult!.QuizSegmentResults.FirstOrDefault(x => x.SegmentId == segmentId)!;
@@ -465,4 +685,12 @@
     {
             return segmentResult!.QuizAnswers.FirstOrDefault(x => x.QuestionId == questionId)!;
     }
+
+    private Color GetResultColor(int result) => result switch
+    {
+        0 => Color.Error,
+        1 => Color.Warning,
+        2 => Color.Success,
+        _ => Color.Default
+    };
 }

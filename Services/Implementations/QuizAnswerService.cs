@@ -48,7 +48,15 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
 
         public async Task<QuizRoundResultDetailedDto?> GradeTeamAnswers(NewQuizRoundResultDto roundDto)
         {
-            var response = await _http.PostAsJsonAsync($"{BasePath}", roundDto);
+            var response = await _http.PostAsJsonAsync($"{BasePath}/grade", roundDto);
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<QuizRoundResultDetailedDto>()
+                : null;
+        }
+
+        public async Task<QuizRoundResultDetailedDto?> GradeExistingTeamAnswers(QuizRoundResultDetailedDto roundDto)
+        {
+            var response = await _http.PostAsJsonAsync($"{BasePath}/grade/existing", roundDto);
             return response.IsSuccessStatusCode
                 ? await response.Content.ReadFromJsonAsync<QuizRoundResultDetailedDto>()
                 : null;

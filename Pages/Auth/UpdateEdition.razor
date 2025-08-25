@@ -222,13 +222,13 @@
             return false;
         }
 
-        if (RegistrationStart >= RegistrationEnd)
+        if (RegistrationStart > RegistrationEnd)
         {
             Snackbar.Add("Registration start must be before registration end.", Severity.Error);
             return false;
         }
 
-        if (RegistrationEnd >= Time)
+        if (RegistrationEnd > Time)
         {
             Snackbar.Add("Registration end must be before edition time.", Severity.Error);
             return false;

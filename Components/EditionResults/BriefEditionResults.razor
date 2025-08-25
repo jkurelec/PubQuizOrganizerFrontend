@@ -200,36 +200,70 @@
 
     private async Task SaveAllRoundResultsAsync()
     {
-        foreach (var (teamId, roundId) in modifiedCells)
+        if (modifiedCells == null || modifiedCells.Count == 0)
+            return;
+
+        var toProcess = modifiedCells.Distinct().ToList();
+        var saved = new List<(int teamId, int roundId)>();
+
+        foreach (var (teamId, roundId) in toProcess)
         {
-            var points = roundPoints[teamId][roundId];
-            var result = results!.First(r => r.Id == teamId);
-            var existing = result.Rounds?.FirstOrDefault(r => r.RoundId == roundId);
+            decimal current = 0m;
+            if (roundPoints.TryGetValue(teamId, out var rp) && rp.TryGetValue(roundId, out var curVal))
+                current = curVal;
 
-            var dto = new NewQuizRoundResultDto
-                {
-                    EditionResultId = teamId,
-                    RoundId = roundId,
-                    Points = points
-                };
+            decimal original = 0m;
+            if (originalRoundPoints.TryGetValue(teamId, out var or) && or.TryGetValue(roundId, out var origVal))
+                original = origVal;
 
-            if (existing == null)
-                await QuizAnswerService.AddTeamRoundPoints(dto);
-            else
+            if (current == original)
+                continue;
+
+            try
             {
-                if (await QuizAnswerService.IsDetailedResult(existing.Id))
-                    await QuizAnswerService.DeleteRoundResultSegments(existing.Id);
+                var result = results?.FirstOrDefault(r => r.Id == teamId);
+                if (result == null)
+                    continue;
 
-                await QuizAnswerService.UpdateTeamRoundPoints(dto);
+                var existing = result.Rounds?.FirstOrDefault(r => r.RoundId == roundId);
+
+                var dto = new NewQuizRoundResultDto
+                    {
+                        EditionResultId = teamId,
+                        RoundId = roundId,
+                        Points = current
+                    };
+
+                if (existing == null)
+                {
+                    await QuizAnswerService.AddTeamRoundPoints(dto);
+                }
+                else
+                {
+                    if (await QuizAnswerService.IsDetailedResult(existing.Id))
+                        await QuizAnswerService.DeleteRoundResultSegments(existing.Id);
+
+                    await QuizAnswerService.UpdateTeamRoundPoints(dto);
+                }
+                saved.Add((teamId, roundId));
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to save team {teamId} round {roundId}: {ex.Message}");
             }
         }
 
-        modifiedCells.Clear();
-        results = (await QuizAnswerService.GetEditionResults(editionId))?.OrderBy(r => r.Rank).ToList();
-        if (!editionRated)
-            canCalculateRank = AllResultsEnteredForAllRounds();
+        foreach (var s in saved)
+            modifiedCells.Remove(s);
 
-        InitializeRoundState();
+        if (saved.Count > 0)
+        {
+            results = (await QuizAnswerService.GetEditionResults(editionId))?.OrderBy(r => r.Rank).ToList();
+            if (!editionRated)
+                canCalculateRank = AllResultsEnteredForAllRounds();
+
+            InitializeRoundState();
+        }
     }
 
     private void InitializeRoundState()
