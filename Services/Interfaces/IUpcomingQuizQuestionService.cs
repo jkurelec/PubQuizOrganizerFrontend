@@ -12,6 +12,7 @@ namespace PubQuizOrganizerFrontend.Services.Interfaces
         Task<bool> DeleteQuestion(int id);
         Task<bool> DeleteSegment(int id);
         Task<bool> DeleteRound(int id);
+        Task<bool> DoesEditionHaveQuestions(int editionId);
         Task<QuizQuestionDto?> EditQuestion(QuizQuestionDto dto, IBrowserFile? file);
         Task<QuizSegmentDto?> EditSegment(QuizSegmentDto dto);
         Task<QuizRoundBriefDto?> EditRound(QuizRoundBriefDto dto);

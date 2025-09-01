@@ -8,12 +8,12 @@ namespace PubQuizOrganizerFrontend.Utils
         {
             PaletteLight = new PaletteLight
             {
-                Primary = "#6E4C37",         // Warm wood brown
-                Secondary = "#C2A97E",       // Soft parchment gold
-                Tertiary = "#4B382A",        // Deeper brown (accent)
+                Primary = "#6E4C37",
+                Secondary = "#C2A97E",
+                Tertiary = "#4B382A",
 
-                Background = "#FFFFFF",      // Pure white background now
-                Surface = "#FFFFFF",         // Keep surfaces white for consistency
+                Background = "#FFFFFF",
+                Surface = "#FFFFFF",
 
                 AppbarBackground = "#3E2E23",
                 AppbarText = "#FAFAFA",

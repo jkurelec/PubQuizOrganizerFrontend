@@ -34,6 +34,14 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
                 : new List<QuizEditionBriefDto>();
         }
 
+        public async Task<IEnumerable<QuizEditionMinimalDto>> GetByTeamId(int teamId)
+        {
+            var response = await _http.GetAsync($"{BasePath}/team/{teamId}");
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<IEnumerable<QuizEditionMinimalDto>>() ?? new List<QuizEditionMinimalDto>()
+                : new List<QuizEditionMinimalDto>();
+        }
+
         public async Task<QuizEditionDetailedDto?> GetById(int id)
         {
             var response = await _http.GetAsync($"{BasePath}/{id}");

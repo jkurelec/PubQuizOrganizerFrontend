@@ -4,6 +4,7 @@
 @inject IQuizEditionService QuizEditionService
 @inject IQuizEditionApplicationService QuizEditionApplicationService
 @inject IOrganizationService OrganizationService
+@inject IUpcomingQuizQuestionService UpcomingQuizQuestionService
 @inject ISnackbar Snackbar
 @inject UserInfoService UserInfoService
 @inject NavigationManager Navigation
@@ -34,6 +35,16 @@ else
                 Class="mt-4"
                 OnClick="@(() => Navigation.NavigateTo($"/edition-results/{edition.Id}?detailed={DetailedQuestions}"))">
                     Enter points!
+                </MudButton>
+            }
+            @if (hasQuestions)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           FullWidth
+                           Class="mt-4"
+                           OnClick="@(() => Navigation.NavigateTo($"/edition/display/{edition.Id}"))">
+                    Display Questions
                 </MudButton>
             }
             <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Spacing="4">
@@ -111,7 +122,6 @@ else
                         </MudExpansionPanel>
                     </MudExpansionPanels>
 
-                    <!-- Pending Teams -->
                     <MudText Typo="Typo.subtitle1" Class="mt-4"><b>Pending Teams:</b> @edition.PendingTeams</MudText>
 
                     <MudExpansionPanels Elevation="0" Dense="true">
@@ -178,7 +188,6 @@ else
             </MudStack>            
             <MudDivider Class="pb-4" />
 
-            <!-- Details Segment -->
             <MudDivider Class="pb-4"  />
             <MudStack Spacing="2">
                 @if (edition.Fee != null && edition.FeeType is > 0 and <= 3)
@@ -219,7 +228,6 @@ else
                 }
             </MudStack>
 
-            <!-- Description -->
             @if (!string.IsNullOrWhiteSpace(edition.Description))
             {
                 <MudDivider Class="my-2" />
@@ -227,7 +235,6 @@ else
                 <MudText>@edition.Description</MudText>
             }
 
-            <!-- Map -->
             <MudDivider Class="my-2" />
             <MudText Typo="Typo.h6"><strong>@edition.Location.Name, @edition.Location.City</strong></MudText>
             <iframe class="w-100" style="border:0; border-radius: 0.5rem; height: 30rem"
@@ -285,6 +292,7 @@ else
     private MudButton? deleteButtonRef;
     private bool canEnterResults = false;
     private bool? DetailedQuestions = null;
+    private bool hasQuestions = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -299,6 +307,7 @@ else
             canEnterResults = HasAnyPermission(userHost.HostPermissions) && (edition.Time < DateTime.UtcNow);
 
         DetailedQuestions = await QuizEditionService.HasDetailedQuestions(Id);
+        hasQuestions = await UpcomingQuizQuestionService.DoesEditionHaveQuestions(Id);
     }
 
     private double GetAcceptedPercentage()

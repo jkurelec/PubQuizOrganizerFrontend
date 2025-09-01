@@ -1,0 +1,343 @@
+﻿@page "/edition/display/{EditionId:int}"
+@attribute [Authorize]
+
+@using DocumentFormat.OpenXml
+@using DocumentFormat.OpenXml.Packaging
+@using DocumentFormat.OpenXml.Presentation
+@using A = DocumentFormat.OpenXml.Drawing
+
+@inject IUpcomingQuizQuestionService QuizQuestionService
+@inject IPrivateMediaService PrivateMediaService
+@inject IJSRuntime JS
+
+<MudContainer MaxWidth="MaxWidth.False" Class="pa-0">
+    @if (Rounds == null)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (!Rounds.Any())
+    {
+        <p>No rounds loaded.</p>
+    }
+    else
+    {
+        @foreach (var round in Rounds)
+        {
+            <MudPaper Class="pa-2 mb-2" Elevation="1">
+                <MudStack Spacing="1">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(async () => await OpenSlideshow(round, false))">
+                        Round @round.Number Questions (@round.QuizSegments.Sum(s => s.Questions.Count()) questions)
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="@(async () => await OpenSlideshow(round, true))">
+                        Round @round.Number Answers
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@if (ShowSlideshow)
+{
+    <div tabindex="0" @ref="wrapperDiv" class="fullscreen-slideshow" @onkeydown="OnKeyDown">
+        <div class="fullscreen-slide-content">
+            <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="fill-height pa-4" Style="height: 100%; width: 100%;">
+                @if (CurrentSlides?.Count > 0)
+                {
+                    <MudPaper Class="pa-4" Style="width: 100%; height: 100%; display: flex; flex-direction: column;">
+                        @if (CurrentSlide != null)
+                        {
+                            <div>
+                                @if (CurrentSlide.Type == QuestionType.REGULAR)
+                                {
+                                    <h5>@CurrentSlide.Number. @CurrentSlide.Question</h5>
+                                }
+                                else if (CurrentSlide.Type == QuestionType.MULTIPLE_CHOICE)
+                                {
+                                    var questionText = CurrentSlide.Question.TrimEnd('|');
+
+                                    var allOptions = Regex.Split(questionText, @"(?=[a-d]\))")
+                                    .Select(o => o.Trim())
+                                    .Where(o => !string.IsNullOrWhiteSpace(o))
+                                    .ToList();
+
+                                    var options = allOptions.Skip(1)
+                                    .Select(o => o.TrimEnd('|').Trim())
+                                    .ToList();
+
+                                    var correctAnswers = CurrentSlide.Answer?.Split("||") ?? Array.Empty<string>();
+
+                                    <h5 class="pb-4">@CurrentSlide.Number. @allOptions[0]</h5>
+
+                                    <MudStack Spacing="0">
+                                        @foreach (var option in options)
+                                        {
+                                            var letter = Regex.Match(option, @"^[a-d]\)").Value;
+                                            var text = option.Substring(letter.Length).Trim();
+
+                                            var isCorrect = IsAnswerMode && correctAnswers.Contains(letter);
+
+                                            <span style="@(isCorrect ? "color:red;font-weight:bold;" : "")">
+                                                <h5>@letter @text</h5>
+                                            </span>
+
+                                            <br />
+                                        }
+                                    </MudStack>
+                                }
+                                else if (CurrentSlide.Type == QuestionType.IMAGE && !string.IsNullOrEmpty(CurrentSlide.MediaUrl))
+                                {
+                                    <div class="d-flex flex-column">
+
+                                        <div>
+                                            <h5>@CurrentSlide.Number. @CurrentSlide.Question</h5>
+                                        </div>
+                                        <div>
+                                            <MediaViewer MediaBytes="CurrentSlide.Media" MediaType="CurrentSlide.Type" />
+                                        </div>
+                                    </div>
+                                }
+                                else if (CurrentSlide.Type == QuestionType.VIDEO && !string.IsNullOrEmpty(CurrentSlide.MediaUrl))
+                                {
+                                    <div class="d-flex flex-column">
+                                        <h5>@CurrentSlide.Number. @CurrentSlide.Question</h5>
+                                        <MediaViewer MediaBytes="CurrentSlide.Media" MediaType="CurrentSlide.Type" />
+                                    </div>
+                                }
+                                else if (CurrentSlide.Type == QuestionType.AUDIO && !string.IsNullOrEmpty(CurrentSlide.MediaUrl))
+                                {
+                                    <div class="d-flex flex-column">
+                                        <h5>@CurrentSlide.Number. @CurrentSlide.Question</h5>
+                                        <MediaViewer MediaBytes="CurrentSlide.Media" MediaType="CurrentSlide.Type" />
+                                    </div>
+                                }
+
+                                @if (IsAnswerMode && CurrentSlide.Type != QuestionType.MULTIPLE_CHOICE)
+                                {
+                                    <h5 style="color:red;font-weight:bold;">@CurrentSlide.Answer</h5>
+                                }
+                            </div>
+                        }
+                    </MudPaper>
+                }
+            </MudStack>
+        </div>
+    </div>
+}
+
+<script>
+    function setupFullscreenChangeListener(dotNetRef) {
+    document.addEventListener("fullscreenchange", () => {
+    dotNetRef.invokeMethodAsync("OnFullscreenChange", document.fullscreenElement != null);
+    });
+    }
+</script>
+
+<script>
+    function downloadFile(fileName, base64) {
+        const link = document.createElement('a');
+        link.href = "data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64," + base64;
+        link.download = fileName;
+        link.click();
+    }
+</script>
+
+@code {
+    [Parameter]
+    public int EditionId { get; set; }
+
+    private ElementReference wrapperDiv;
+    private bool _shouldFocusWrapperDiv = false;
+
+    private IEnumerable<QuizRoundDto>? Rounds;
+    private IEnumerable<QuizRoundDto>? RoundsWithMedia;
+    private bool ShowSlideshow = false;
+    private bool IsAnswerMode = false;
+    private List<QuizQuestionDtoWithMediaLoaded>? CurrentSlides;
+    private QuizQuestionDtoWithMediaLoaded? CurrentSlide;
+    private int CurrentSlideIndex = 0;
+
+    private bool IsFirstSlide => CurrentSlideIndex <= 0;
+    private bool IsLastSlide => CurrentSlides == null || CurrentSlideIndex >= CurrentSlides.Count - 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        int questionNumber = 1;
+        Rounds = await QuizQuestionService.GetRounds(EditionId);
+
+        RoundsWithMedia = Rounds?
+            .Select(r => new QuizRoundDto
+                {
+                    Id = r.Id,
+                    Number = r.Number,
+                    EditionId = r.EditionId,
+                    Points = r.Points,
+                    QuizSegments = r.QuizSegments
+                        .Select(s => new QuizSegmentDto
+                        {
+                            Id = s.Id,
+                            RoundId = s.RoundId,
+                            Number = s.Number,
+                            Type = s.Type,
+                            BonusPoints = s.BonusPoints,
+                            Questions = s.Questions
+                                .Select(q =>
+                                {
+                                    var qWithMedia = new QuizQuestionDtoWithMediaLoaded
+                                    {
+                                        Id = q.Id,
+                                        SegmentId = q.SegmentId,
+                                        Type = q.Type,
+                                        Question = q.Question,
+                                        Answer = q.Answer,
+                                        Points = q.Points,
+                                        BonusPoints = q.BonusPoints,
+                                        MediaUrl = q.MediaUrl,
+                                        Number = questionNumber,
+                                        Rating = q.Rating,
+                                        Media = null
+                                    };
+                                    questionNumber++;
+                                    _ = LoadMediaAsync(qWithMedia);
+
+                                    return qWithMedia;
+                                })
+                                .ToList()
+                        })
+                        .ToList()
+                })
+            .ToList();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("setupFullscreenChangeListener",
+                DotNetObjectReference.Create(this));
+        }
+
+        if (_shouldFocusWrapperDiv)
+        {
+            _shouldFocusWrapperDiv = false;
+            await wrapperDiv.FocusAsync();
+            await EnterFullscreenAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadMediaAsync(QuizQuestionDtoWithMediaLoaded question)
+    {
+        question.Media = await GetMedia(question);
+        StateHasChanged();
+    }
+
+    protected async Task<byte[]?> GetMedia(QuizQuestionDto question)
+    {
+        if (RequiresMedia(question.Type) && question.MediaUrl is not null)
+        {
+            var parts = question.MediaUrl.Split('/');
+            if (parts.Length == 3 && int.TryParse(parts[1], out int editionId))
+            {
+                return await PrivateMediaService.GetMediaFile(parts[0], editionId, parts[2]);
+            }
+        }
+        return null;
+    }
+
+    private bool RequiresMedia(QuestionType? type) =>
+        type == QuestionType.IMAGE || type == QuestionType.AUDIO || type == QuestionType.VIDEO;
+
+    private async Task OpenSlideshow(QuizRoundDto round, bool showAnswers)
+    {
+        IsAnswerMode = showAnswers;
+
+        var roundWithMedia = RoundsWithMedia?.FirstOrDefault(r => r.Id == round.Id);
+        if (roundWithMedia == null)
+            return;
+
+        CurrentSlides = roundWithMedia.QuizSegments
+            .OrderBy(s => s.Number)
+            .SelectMany(s => s.Questions.OrderBy(q => q.Number))
+            .OfType<QuizQuestionDtoWithMediaLoaded>()
+            .ToList();
+
+        CurrentSlideIndex = 0;
+        CurrentSlide = CurrentSlides.FirstOrDefault();
+        ShowSlideshow = true;
+        _shouldFocusWrapperDiv = true;
+    }
+
+    private void NextSlide()
+    {
+        if (CurrentSlides == null) return;
+        if (CurrentSlideIndex < CurrentSlides.Count - 1)
+        {
+            CurrentSlideIndex++;
+            CurrentSlide = CurrentSlides[CurrentSlideIndex];
+        }
+    }
+
+    private void PrevSlide()
+    {
+        if (CurrentSlides == null) return;
+        if (CurrentSlideIndex > 0)
+        {
+            CurrentSlideIndex--;
+            CurrentSlide = CurrentSlides[CurrentSlideIndex];
+        }
+    }
+
+    private void CloseSlideshow()
+    {
+        ShowSlideshow = false;
+        CurrentSlides = null;
+        CurrentSlide = null;
+        _shouldFocusWrapperDiv = false;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (!ShowSlideshow) return;
+
+        switch (e.Key)
+        {
+            case "ArrowRight":
+                if (CurrentSlideIndex < CurrentSlides!.Count - 1)
+                {
+                    CurrentSlideIndex++;
+                    CurrentSlide = CurrentSlides[CurrentSlideIndex];
+                }
+                break;
+            case "ArrowLeft":
+                if (CurrentSlideIndex > 0)
+                {
+                    CurrentSlideIndex--;
+                    CurrentSlide = CurrentSlides[CurrentSlideIndex];
+                }
+                break;
+        }
+    }
+
+    private async Task EnterFullscreenAsync()
+    {
+        await JS.InvokeVoidAsync("eval", @"
+            (function() {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) { elem.requestFullscreen(); }
+                else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+                else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
+            })()
+        ");
+    }
+
+    [JSInvokable]
+    public void OnFullscreenChange(bool isFullscreen)
+    {
+        if (!isFullscreen)
+        {
+            CloseSlideshow();
+            StateHasChanged();
+        }
+    }
+}

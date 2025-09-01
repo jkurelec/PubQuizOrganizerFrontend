@@ -151,7 +151,6 @@
                 }
             </MudTabPanel>
 
-            <!-- Past Editions Tab -->
             <MudTabPanel Text="Past Editions">
                 @if (!pastEditions.Any())
                 {
@@ -229,7 +228,6 @@
                 }
             </MudTabPanel>
 
-            <!-- Hosts Tab -->
             <MudTabPanel Text="Hosts">
                 @if (hosts == null || !hosts.Any())
                 {
@@ -241,7 +239,6 @@
                     {
                         <MudPaper Class="pa-3 mb-2">
                             <MudGrid>
-                                <!-- Left: Profile Image -->
                                 <MudItem xs="12" sm="1" Class="d-flex justify-center">
                                     <MudAvatar Size="Size.Large">
                                         <MudImage Src="@($"{MediaServerPaths.GetPublicPath(MediaServerResource.User)}{host.UserBrief.ProfileImage}")"
@@ -250,14 +247,12 @@
                                     </MudAvatar>
                                 </MudItem>
 
-                                <!-- Middle: User Info -->
                                 <MudItem xs="12" sm="10">
                                     <MudText Typo="Typo.subtitle1">@host.UserBrief.Username</MudText>
                                     <MudText Typo="Typo.body2">@host.UserBrief.Email</MudText>
                                     <MudText Typo="Typo.caption">Rating: @host.UserBrief.Rating</MudText>
                                 </MudItem>
 
-                                <!-- Right: Remove Button (if allowed) -->
                                 @if (userHost?.IsOwner == true && !host.IsOwner)
                                 {
                                     <MudItem xs="12" sm="1" Class="d-flex justify-end">
@@ -269,7 +264,6 @@
                                     </MudItem>
                                 }
 
-                                <!-- Second Row: Full width for permissions -->
                                 <MudItem xs="12">
                                     <MudExpansionPanels Class="mt-2">
                                         <MudExpansionPanel Text="Permissions">
@@ -296,7 +290,6 @@
                 }
             </MudTabPanel>
 
-            <!-- Details Tab -->
             <MudTabPanel Text="Details">
                 <MudText Typo="Typo.h6" Class="mb-2">
                     Categories

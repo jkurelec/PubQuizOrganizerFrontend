@@ -109,7 +109,6 @@
 
     <MudItem xs="12" md="4">
         <MudPaper Class="pa-4">
-            <!-- Hosts Section -->
             <MudText Typo="Typo.h6" Class="mb-2">Hosts</MudText>
 
             @if (hosts == null)
@@ -504,6 +503,6 @@
         _transferPopupHostId = null;
     }
 
-    string GetTransferButtonId(int hostId) => $"transferBtn_{hostId}";
-
+    string GetTransferButtonId(int hostId) =>
+        $"transferBtn_{hostId}";
 }

@@ -161,5 +161,10 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
                 ? await response.Content.ReadFromJsonAsync<List<QuizRoundDto>>() ?? new List<QuizRoundDto>()
                 : new List<QuizRoundDto>();
         }
+
+        public async Task<bool> DoesEditionHaveQuestions(int editionId)
+        {
+            return await _http.GetFromJsonAsync<bool>($"{BasePath}/has-questions/{editionId}");
+        }
     }
 }

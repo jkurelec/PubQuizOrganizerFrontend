@@ -17,7 +17,7 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
         public async Task<QCategoryDto> GetById(int id)
         {
             var result = await _http.GetFromJsonAsync<QCategoryDto>($"{BasePath}/{id}");
-            return result ?? new QCategoryDto();  // never null
+            return result ?? new QCategoryDto();
         }
 
         public async Task<IEnumerable<QCategoryDto>> GetByName(string name)

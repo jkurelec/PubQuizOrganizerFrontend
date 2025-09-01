@@ -19,5 +19,6 @@ namespace PubQuizOrganizerFrontend.Services.Interfaces
         Task<string?> UpdateProfileImage(IBrowserFile image, int editionId);
         Task<bool?> HasDetailedQuestions(int editionId);
         Task<bool> SetDetailedQuestions(int editionId, bool detailed);
+        Task<IEnumerable<QuizEditionMinimalDto>> GetByTeamId(int teamId);
     }
 }
