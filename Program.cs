@@ -40,14 +40,14 @@ builder.Services.AddTransient<RetryingTokenHandler>();
 
 builder.Services.AddHttpClient("ApiClient", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7062/");
+    client.BaseAddress = new Uri("https://192.168.0.187:7062/");
     client.DefaultRequestHeaders.Add("AppName", "Organizer");
 })
 .AddHttpMessageHandler<RetryingTokenHandler>();
 
 builder.Services.AddHttpClient("RefreshClient", client =>
 {
-    client.BaseAddress = new Uri("https://localhost:7062/");
+    client.BaseAddress = new Uri("https://192.168.0.187:7062/");
 })
 .ConfigureHttpClient(c => c.DefaultRequestHeaders.Add("AppName", "Organizer"));
 

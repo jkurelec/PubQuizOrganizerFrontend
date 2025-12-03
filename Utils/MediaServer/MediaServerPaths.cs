@@ -4,7 +4,7 @@ namespace PubQuizOrganizerFrontend.Utils.MediaServer
 {
     public static class MediaServerPaths
     {
-        private static readonly string BasePath = "https://localhost:7246/media";
+        private static readonly string BasePath = "https://192.168.0.187:7246/media";
 
         private static class Public
         {

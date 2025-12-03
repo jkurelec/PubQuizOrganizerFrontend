@@ -1,6 +1,9 @@
-﻿using PubQuizOrganizerFrontend.Models.Dto.QuizAnswerDto;
+﻿using Microsoft.AspNetCore.Components.Forms;
+using PubQuizOrganizerFrontend.Models.Dto.QuizAnswerDto;
 using PubQuizOrganizerFrontend.Services.Interfaces;
 using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
 
 namespace PubQuizOrganizerFrontend.Services.Implementations
 {
@@ -49,6 +52,22 @@ namespace PubQuizOrganizerFrontend.Services.Implementations
         public async Task<QuizRoundResultDetailedDto?> GradeTeamAnswers(NewQuizRoundResultDto roundDto)
         {
             var response = await _http.PostAsJsonAsync($"{BasePath}/grade", roundDto);
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<QuizRoundResultDetailedDto>()
+                : null;
+        }
+
+        public async Task<QuizRoundResultDetailedDto?> AutoGradeTeamAnswers(Stream stream, string fileName, QuizRoundResultDetailedDto roundResult)
+        {
+            using var content = new MultipartFormDataContent();
+
+            content.Add(new StreamContent(stream), "image", fileName);
+
+            var json = JsonSerializer.Serialize(roundResult);
+            content.Add(new StringContent(json), "roundResult");
+
+            var response = await _http.PostAsync($"{BasePath}/auto-grade", content);
+
             return response.IsSuccessStatusCode
                 ? await response.Content.ReadFromJsonAsync<QuizRoundResultDetailedDto>()
                 : null;

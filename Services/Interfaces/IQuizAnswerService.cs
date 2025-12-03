@@ -1,4 +1,5 @@
-﻿using PubQuizOrganizerFrontend.Models.Dto.QuizAnswerDto;
+﻿using Microsoft.AspNetCore.Components.Forms;
+using PubQuizOrganizerFrontend.Models.Dto.QuizAnswerDto;
 
 namespace PubQuizOrganizerFrontend.Services.Interfaces
 {
@@ -10,6 +11,7 @@ namespace PubQuizOrganizerFrontend.Services.Interfaces
         Task<IEnumerable<QuizEditionResultBriefDto>> RankTeamsOnEdition(int editionId);
         Task<IEnumerable<QuizEditionResultBriefDto>> BreakTie(int promotedId, int editionId);
         Task<QuizRoundResultDetailedDto?> GradeTeamAnswers(NewQuizRoundResultDto roundDto);
+        Task<QuizRoundResultDetailedDto?> AutoGradeTeamAnswers(Stream stream, string fileName, QuizRoundResultDetailedDto roundResult);
         Task<QuizRoundResultDetailedDto?> GradeExistingTeamAnswers(QuizRoundResultDetailedDto roundDto);
         Task<QuizRoundResultMinimalDto?> AddTeamRoundPoints(NewQuizRoundResultDto roundDto);
         Task<QuizRoundResultDetailedDto?> AddTeamRoundPointsDetailed(NewQuizRoundResultDto roundDto);

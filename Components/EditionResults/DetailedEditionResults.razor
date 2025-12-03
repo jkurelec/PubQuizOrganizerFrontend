@@ -238,6 +238,9 @@
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="GradeTeamAnswers" Disabled="editionRated">
                         Grade Answers
                     </MudButton>
+                    <MudPaper Class="p-4">
+                        <InputFile OnChange="OnFileSelected" accept="image/*" capture="environment" />
+                    </MudPaper>
                 </MudPaper>
             }
         </div>
@@ -259,7 +262,7 @@
 @if (!allAnswersEnteredPopUp)
 {
     <MudPaper Elevation="8" Square="false"
-              Style="position:fixed; top:50%; left:50%; transform: translate(-50%, -50%);
+    Style="position:fixed; top:50%; left:50%; transform: translate(-50%, -50%);
                      z-index:2000; padding:24px; max-width:400px; text-align:center; background:white;">
         <MudText Typo="Typo.h6" Class="mb-4">
             Not entering all the answers will result in less accurate rating calculation
@@ -300,6 +303,7 @@
     private bool canCalculateRank = false;
     private bool allAnswersEnteredPopUp = true;
 
+
     protected override async Task OnInitializedAsync()
     {
         rounds = (await QuestionService.GetRounds(EditionId)).ToList() ?? new();
@@ -326,6 +330,48 @@
         results = results.OrderBy(x => x.Rank).ToList();
 
         canCalculateRank = !editionRated && AllResultsEnteredForAllRounds();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null)
+            return;
+
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024)
+                  .CopyToAsync(ms);
+        ms.Position = 0;
+
+        var fileName = file.Name;
+        var contentType = file.ContentType;
+        int tempResultId = (int)resultId!;
+        int tempRoundId = (int)selectedRoundId!;
+
+        if (roundResult == null)
+        {
+            await SaveRoundResult();
+            SelectRound(tempResultId, tempRoundId);
+        }
+
+        var newResult = await AnswerService.AutoGradeTeamAnswers(ms, fileName, roundResult);
+
+        var editionResult = results.FirstOrDefault(r => r.Rounds.Any(x => x.Id == newResult.Id));
+        if (editionResult != null)
+        {
+            var roundsList = editionResult.Rounds.ToList();
+
+            var index = roundsList.FindIndex(x => x.Id == newResult.Id);
+            if (index >= 0)
+            {
+                roundsList[index] = newResult;
+            }
+
+            editionResult.Rounds = roundsList;
+            SelectRound(tempResultId, tempRoundId);
+        }
+
+        StateHasChanged();
     }
 
     private void SelectRound(int teamId, int roundId)
