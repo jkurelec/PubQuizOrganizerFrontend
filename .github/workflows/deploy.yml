@@ -20,7 +20,7 @@ jobs:
 
       - name: Fix base path & 404
         run: |
-          sed -i 's|<base href="/" />|<base href="/YOUR-REPO-NAME/" />|g' publish/wwwroot/index.html
+          sed -i 's|<base href="/" />|<base href="/PubQuizOrganizerFrontend/" />|g' publish/wwwroot/index.html
           cp publish/wwwroot/index.html publish/wwwroot/404.html
           touch publish/wwwroot/.nojekyll
 
