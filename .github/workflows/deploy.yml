@@ -20,9 +20,31 @@ jobs:
 
       - name: Fix base path & 404
         run: |
-          sed -i 's|<base href="/" />|<base href="/PubQuizOrganizerFrontend/" />|g' publish/wwwroot/index.html
-          cp publish/wwwroot/index.html publish/wwwroot/404.html
-          touch publish/wwwroot/.nojekyll
+            sed -i 's|<base href="/" />|<base href="/PubQuizOrganizerFrontend/" />|g' publish/wwwroot/index.html
+            touch publish/wwwroot/.nojekyll
+            
+            # Create a proper SPA 404.html that redirects back to index with the path
+            cat > publish/wwwroot/404.html << 'EOF'
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <script>
+                var segment = 1;
+                var l = window.location;
+                l.replace(
+                  l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+                  l.pathname.split('/').slice(0, 1 + segment).join('/') + '/?p=/' +
+                  l.pathname.slice(1).split('/').slice(segment).join('/').replace(/&/g, '~and~') +
+                  (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+                  l.hash
+                );
+              </script>
+            </head>
+            </html>
+            EOF
+            
+            # Add redirect handler to index.html
+            sed -i 's|<head>|<head><script>var l=window.location,r=/[?&]p=([^&]+)/.exec(l.search);if(r){var d=r[1].replace(/~and~/g,"\&");history.replaceState(null,null,l.pathname.slice(0,-1)+(d.charAt(0)==="/"?"":"/")+d+(r[2]?"&"+l.search.slice(1).replace(/[?&]p=[^&]+/,"").replace(/[?&]q=[^&]+/,function(a){return decodeURIComponent(a.slice(3))}):""))}</script>|g' publish/wwwroot/index.html
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
