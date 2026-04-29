@@ -1,5 +1,5 @@
 self.assetsManifest = {
-  "version": "odPcqfc+",
+  "version": "QfNViT3T",
   "assets": [
     {
       "hash": "sha256-K6i4iAn5RKkZtfRgy4U7Km03IQ275G01NS7wMkGac+s=",
@@ -122,8 +122,8 @@ self.assetsManifest = {
       "url": "_framework/Newtonsoft.Json.qkbufwhni2.wasm"
     },
     {
-      "hash": "sha256-8Cigl6OpFrKdpiTfCilQtT8xzDsW8X5jJ+RIySxSMuM=",
-      "url": "_framework/PubQuizOrganizerFrontend.8icf61czlp.wasm"
+      "hash": "sha256-nOYxEW/LV0Zu6Ep5XbI8+63ZamQkwGSxGwhHBXlJJ6A=",
+      "url": "_framework/PubQuizOrganizerFrontend.sk75x0rv08.wasm"
     },
     {
       "hash": "sha256-M6pAyytx0NqhdfkHY8tzNWPwdlsuqP4lcKAKTuRoZgs=",
@@ -314,7 +314,7 @@ self.assetsManifest = {
       "url": "_framework/System.dqfxtvioy0.wasm"
     },
     {
-      "hash": "sha256-jPsOXzsbJJYXO6gB1RSGx6oMTFvuqCjNquuioJ/3Mbs=",
+      "hash": "sha256-X8cWH1m6E1dXPPycwJ3cXjxING65xHqylv8wolmv6RM=",
       "url": "_framework/blazor.boot.json"
     },
     {
